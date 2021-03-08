@@ -1,0 +1,3 @@
+[submodule "external/DALIGNER"]
+	path = external/DALIGNER
+	url = https://github.com/thegenemyers/DALIGNER.git

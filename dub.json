@@ -1,0 +1,19 @@
+{
+    "authors": [
+        "Arne Ludwig <arne.ludwig@posteo.de>"
+    ],
+    "copyright": "Copyright © 2021, Arne Ludwig <arne.ludwig@posteo.de>",
+    "description": "Interface library for Dazzler file formats.",
+    "license": "MIT",
+    "name": "dazzlib",
+    "targetType": "library",
+    "preBuildCommands": [
+        "make -C external -f Makefile.DALIGNER $${DUB_FORCE:+--always-make} BUILD_TYPE=$BUILD_TYPE"
+    ],
+    "libs": [
+        "DALIGNER"
+    ],
+    "lflags": [
+        "-L$PACKAGE_DIR/external/.build/lib"
+    ]
+}

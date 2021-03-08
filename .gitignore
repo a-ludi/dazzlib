@@ -1,0 +1,16 @@
+.dub
+docs.json
+__dummy.html
+docs/
+/dazzlib
+libdazzlib.so
+dazzlib.dylib
+dazzlib.dll
+libdazzlib.a
+dazzlib.lib
+dazzlib-test-*
+*.exe
+*.o
+*.obj
+*.lst
+.unittest-*

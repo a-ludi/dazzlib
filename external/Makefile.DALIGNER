@@ -1,0 +1,50 @@
+srcdir=DALIGNER
+builddir=.build
+libdir=$(builddir)/lib
+objdir=$(builddir)/objdir
+
+WARN_CFLAGS=-Wall -Wextra -Wno-unused-result -fno-strict-aliasing
+DEBUG_CFLAGS=-O0 -g -ggdb $(WARN_CFLAGS)
+RELEASE_CFLAGS=-O3
+
+ifeq ($(BUILD_TYPE),debug)
+CFLAGS=$(DEBUG_CFLAGS)
+
+else ifeq ($(BUILD_TYPE),release-debug)
+CFLAGS=$(DEBUG_CFLAGS)
+
+else ifeq ($(BUILD_TYPE),unittest)
+CFLAGS=$(DEBUG_CFLAGS)
+
+else
+CFLAGS=$(RELEASE_CFLAGS)
+
+endif
+
+ALL_CFLAGS=-I$(srcdir) -DINTERACTIVE $(CFLAGS)
+LDLIBS=-lpthread -lm
+CC=gcc
+
+OBJECTS=$(addprefix $(objdir)/,DB.o QV.o align.o)
+
+.phony: all
+all: $(libdir)/libDALIGNER.a
+
+$(libdir)/libDALIGNER.a: $(OBJECTS) | $(libdir)
+	$(AR) r $@ $^
+
+$(objdir)/%.o: $(srcdir)/%.c $(srcdir)/%.h | $(objdir)
+	$(CC) $(ALL_CFLAGS) -c -o $@ $< $(LDLIBS)
+
+
+$(srcdir)/DB.c: $(srcdir)/QV.h
+$(srcdir)/align.c: $(srcdir)/DB.h
+
+
+$(libdir) $(objdir) $(builddir):
+	mkdir -p $@
+
+
+.phony: clean
+clean:
+	rm -f $(builddir)
