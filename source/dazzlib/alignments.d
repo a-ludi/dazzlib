@@ -487,6 +487,7 @@ class LocalAlignmentReader
         dazzlibEnforce(Open_DB(db.toStringz, &dazzDb) >= 0, currentError);
         scope (exit)
             Close_DB(&dazzDb);
+        catchErrorMessage!Trim_DB(&dazzDb);
 
         return dazzDb
             .reads[0 .. dazzDb.nreads]
