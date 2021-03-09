@@ -8,6 +8,7 @@
 */
 module dazzlib.util.exception;
 
+import dazzlib.core.c.DB;
 import std.exception;
 
 
@@ -21,3 +22,12 @@ class DazzlibException : Exception
 
 ///
 alias dazzlibEnforce = enforce!DazzlibException;
+
+
+///
+void catchErrorMessage(alias work, Args...)(Args args)
+{
+    clearCurrentError();
+    work(args);
+    dazzlibEnforce(!hasError, currentError);
+}

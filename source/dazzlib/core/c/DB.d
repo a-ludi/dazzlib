@@ -35,9 +35,24 @@ extern (D) static this() { Prog_Name = "dazzlib"; }
 extern __gshared char[1000] Ebuffer;
 
 
-@property char[] currentError() nothrow
+/// Get the current error message from Ebuffer as a string.
+extern (D) @property char[] currentError() nothrow
 {
     return fromStringz(Ebuffer.ptr);
+}
+
+
+/// Clear Ebuffer.
+extern (D) void clearCurrentError() nothrow
+{
+    Ebuffer[] = '\0';
+}
+
+
+/// Returns true if Ebuffer is not empty.
+extern (D) @property bool hasError() nothrow
+{
+    return Ebuffer[0] != '\0';
 }
 
 
