@@ -583,7 +583,7 @@ protected:
     void readHeader()
     {
         readNumLocalAlignments();
-        readTracePointDistance();
+        readTracePointSpacing();
     }
 
 
@@ -597,7 +597,7 @@ protected:
     }
 
 
-    void readTracePointDistance()
+    void readTracePointSpacing()
     {
         int rawTracePointSpacing;
 
@@ -818,9 +818,7 @@ void writeAlignments(R)(const string lasFile, R localAlignments)
     auto las = File(lasFile, "wb");
 
     long numLocalAlignments = 0; // will be overwritten at the end
-    auto tracePointSpacing = !localAlignments.empty
-        ? cast(int) localAlignments.front.tracePointSpacing
-        : 100;
+    auto tracePointSpacing = cast(int) AlignmentStats.inferTracePointSpacingFrom(localAlignments);
     las.rawWrite([numLocalAlignments]);
     las.rawWrite([tracePointSpacing]);
 
@@ -868,7 +866,7 @@ unittest
 private auto writeLocalAlignment(
     File las,
     const LocalAlignment localAlignment,
-    const int tracePointDistance,
+    const int tracePointSpacing,
 )
 {
     Overlap overlap;
@@ -888,7 +886,7 @@ private auto writeLocalAlignment(
     overlap.path.bbpos = localAlignment.contigB.begin;
     overlap.path.bepos = localAlignment.contigB.end;
 
-    writeOverlap(las, overlap, localAlignment.tracePoints, tracePointDistance);
+    writeOverlap(las, overlap, localAlignment.tracePoints, tracePointSpacing);
 }
 
 
@@ -896,7 +894,7 @@ private void writeOverlap(
     File las,
     ref Overlap overlap,
     const TracePoint[] tracePoints,
-    const int tracePointDistance,
+    const int tracePointSpacing,
 )
 {
     // set trace vector length
@@ -914,7 +912,7 @@ private void writeOverlap(
     // write trace vector
     if (tracePoints.length > 0)
     {
-        if (isLargeTraceType(tracePointDistance))
+        if (isLargeTraceType(tracePointSpacing))
             las.rawWrite(tracePoints);
         else
             // rewrite trace to use `ubyte`s
@@ -931,4 +929,164 @@ private void writeOverlap(
     }
 }
 
-// TODO AlignmentHeader from dentist/dazzler
+
+struct AlignmentStats
+{
+    /// Total number of local alignments (disregarding chaining)
+    size_t numLocalAlignments;
+
+    /// Total number of unchained alignments
+    size_t numUnchainedAlignments;
+
+    /// Total number of alignment chains
+    size_t numAlignmentChains;
+
+    /// Maximum number of local alignments per chain
+    size_t maxLocalAlignments;
+
+    /// Maximum total number of local alignments per contig
+    size_t maxLocalAlignmentsPerContig;
+
+    /// Total number of trace points
+    size_t numTracePoints;
+
+    /// Maximum number of trace points per local alignment
+    size_t maxTracePoints;
+
+    /// Maximum number of trace points per contig
+    size_t maxTracePointsPerContig;
+
+    /// Trace point spacing
+    trace_point_t tracePointSpacing;
+
+
+    /// Infer stats from given range by traversing it once.
+    static AlignmentStats inferFrom(R)(R localAlignments)
+        if (isInputRange!R && is(const(ElementType!R) == const(LocalAlignment)))
+    {
+        AlignmentStats headerData;
+
+        headerData.tracePointSpacing = inferTracePointSpacingFrom(localAlignments);
+
+        id_t lastContig;
+        id_t numLocalAlignmentsSinceLastContig;
+        id_t numTracePointsSinceLastContig;
+        id_t numLocalAlignmentsInChain = 1;
+        foreach (localAlignment; localAlignments)
+        {
+            if (lastContig != localAlignment.contigA.contig.id)
+            {
+                // udpate maxLocalAlignmentsPerContig
+                headerData.maxLocalAlignmentsPerContig = max(
+                    headerData.maxLocalAlignmentsPerContig,
+                    numLocalAlignmentsSinceLastContig,
+                );
+                numLocalAlignmentsSinceLastContig = 0;
+
+                // udpate maxTracePointsPerContig
+                headerData.maxTracePointsPerContig = max(
+                    headerData.maxTracePointsPerContig,
+                    numTracePointsSinceLastContig,
+                );
+                numTracePointsSinceLastContig = 0;
+            }
+
+            ++headerData.numLocalAlignments;
+            if (localAlignment.flags.start)
+                ++headerData.numAlignmentChains;
+            else if (localAlignment.flags.unchained)
+                ++headerData.numUnchainedAlignments;
+            headerData.maxLocalAlignments = max(
+                headerData.maxLocalAlignments,
+                numLocalAlignmentsInChain,
+            );
+
+            if (localAlignment.flags.start || localAlignment.flags.unchained)
+                numLocalAlignmentsInChain = 0;
+            ++numLocalAlignmentsInChain;
+
+            size_t currentNumTracePoints = localAlignment.tracePoints.length;
+
+            static if (is(typeof(localAlignments.currentNumTracePoints)))
+                if (currentNumTracePoints == 0)
+                    currentNumTracePoints = localAlignments.currentNumTracePoints;
+
+            headerData.numTracePoints += currentNumTracePoints;
+
+            headerData.maxTracePoints = max(
+                headerData.maxTracePoints,
+                currentNumTracePoints,
+            );
+
+            ++numLocalAlignmentsSinceLastContig;
+            numTracePointsSinceLastContig += currentNumTracePoints;
+            lastContig = localAlignment.contigA.contig.id;
+        }
+
+        return headerData;
+    }
+
+
+    /// Infer stats from lasFile range by traversing it once.
+    static AlignmentStats inferFrom(string lasFile)
+    {
+        auto lasScanner = new LocalAlignmentReader(lasFile, BufferMode.skip);
+
+        return inferFrom(lasScanner);
+    }
+
+
+    /// Infer trace point spacing from the range by peeking at the first
+    /// element if possible; otherwise returns 100, the default spacing.
+    static trace_point_t inferTracePointSpacingFrom(R)(R alignments)
+        if (isInputRange!R && is(const(ElementType!R) == const(LocalAlignment)))
+    {
+        if (alignments.empty)
+            return 100;
+
+        return alignments.front.tracePointSpacing;
+    }
+}
+
+unittest
+{
+    import dazzlib.util.testdata;
+
+    assert(AlignmentStats.inferFrom(testLocalAlignments) == AlignmentStats(
+        4,      // numLocalAlignments
+        0,      // numUnchainedAlignments
+        2,      // numAlignmentChains
+        2,      // maxLocalAlignments
+        2,      // maxLocalAlignmentsPerContig
+        4,      // numTracePoints
+        1,      // maxTracePoints
+        2,      // maxTracePointsPerContig
+        100,    // tracePointSpacing
+    ));
+}
+
+unittest
+{
+    import dazzlib.util.tempfile;
+    import dazzlib.util.testdata;
+    import std.file;
+
+    auto lasFile = mkstemp("./.unittest-XXXXXX", ".las");
+    scope (exit)
+        remove(lasFile.name);
+    lasFile.file.close();
+
+    writeTestLas(lasFile.name);
+
+    assert(AlignmentStats.inferFrom(lasFile.name) == AlignmentStats(
+        4,      // numLocalAlignments
+        0,      // numUnchainedAlignments
+        2,      // numAlignmentChains
+        2,      // maxLocalAlignments
+        2,      // maxLocalAlignmentsPerContig
+        4,      // numTracePoints
+        1,      // maxTracePoints
+        2,      // maxTracePointsPerContig
+        100,    // tracePointSpacing
+    ));
+}
