@@ -14,3 +14,4 @@ dazzlib-test-*
 *.obj
 *.lst
 .unittest-*
+*.sublime-*
