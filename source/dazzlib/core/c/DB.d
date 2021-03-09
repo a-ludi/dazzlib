@@ -396,7 +396,7 @@ DAZZ_STUB* Read_DB_Stub (cstring path, StubPart what);
 
 unittest
 {
-    import dazzlib.testing.tempfile;
+    import dazzlib.util.tempfile;
     import std.algorithm;
     import std.conv;
     import std.file;

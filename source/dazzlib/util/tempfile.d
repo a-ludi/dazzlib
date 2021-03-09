@@ -7,7 +7,7 @@
              included LICENSE file.
     Authors: Arne Ludwig <arne.ludwig@posteo.de>
 */
-module dazzlib.testing.tempfile;
+module dazzlib.util.tempfile;
 
 import std.stdio;
 
