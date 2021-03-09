@@ -12,6 +12,9 @@ import dazzlib.core.c.DB;
 import std.algorithm;
 import std.format;
 import std.path;
+import std.stdio;
+import std.string;
+import std.typecons;
 
 /// File suffixes of essential auxiliary .db files.
 enum auxiliaryDbFileSuffixes = [".bps", ".idx"];
@@ -166,4 +169,42 @@ unittest
     assert(dbFiles.basePairs == "/path/to/.test.bps");
     assert(dbFiles.headers == "/path/to/.test.hdr");
     assert(dbFiles.index == "/path/to/.test.idx");
+}
+
+
+/// Validate DB by opening the DB once.
+///
+/// Returns: `null` if DB is valid; otherwise error message.
+string validateDb(string dbFile, Flag!"allowBlock" allowBlock)
+{
+    DAZZ_DB dazzDb;
+    auto openStatus = Open_DB(dbFile.toStringz, &dazzDb);
+    scope (exit)
+        Close_DB(&dazzDb);
+
+    if (openStatus >= 0)
+    {
+        if (!allowBlock && dazzDb.part != 0)
+            return "operation not allowed on a block";
+
+        if (openStatus == 1)
+        {
+            // .dam file -> check if headers are present
+            try
+            {
+                cast(void) File(EssentialDbFiles(dbFile).headers, "r");
+            }
+            catch (Exception e)
+            {
+                return e.msg;
+            }
+        }
+
+        return null;
+    }
+    else
+    {
+        // error in Open_DB
+        return currentError.idup;
+    }
 }
