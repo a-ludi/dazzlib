@@ -29,5 +29,5 @@ void catchErrorMessage(alias work, Args...)(Args args)
 {
     clearCurrentError();
     work(args);
-    dazzlibEnforce(!hasError, currentError);
+    dazzlibEnforce(!hasError, currentError.idup);
 }
