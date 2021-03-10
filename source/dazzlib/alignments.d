@@ -1102,6 +1102,7 @@ struct AlignmentStats
 
     /// Maximum total number of local alignments per contig
     size_t maxLocalAlignmentsPerContig;
+    alias maxLocalAlignmentsPerRead = maxLocalAlignmentsPerContig;
 
     /// Total number of trace points
     size_t numTracePoints;
@@ -1111,6 +1112,7 @@ struct AlignmentStats
 
     /// Maximum number of trace points per contig
     size_t maxTracePointsPerContig;
+    alias maxTracePointsPerRead = maxTracePointsPerContig;
 
     /// Trace point spacing
     trace_point_t tracePointSpacing;
