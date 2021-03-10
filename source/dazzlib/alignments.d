@@ -813,6 +813,161 @@ unittest
 }
 
 
+/// Construct a range that lazily reads local alignments from lasFile. If
+/// dbA and/or dbB are given, the contig lengths will be filled in. If no
+/// tracePointBuffer is given, it will be constructed internally according
+/// to bufferMode.
+///
+/// See_also: LocalAlignmentReader
+LocalAlignmentReader localAlignmentReader(
+    in string lasFile,
+    BufferMode bufferMode = BufferMode.skip,
+    TracePoint[] tracePointBuffer = [],
+)
+{
+    return localAlignmentReader(lasFile, null, null, bufferMode, tracePointBuffer);
+}
+
+/// ditto
+LocalAlignmentReader localAlignmentReader(
+    in string lasFile,
+    in string dbA,
+    BufferMode bufferMode = BufferMode.skip,
+    TracePoint[] tracePointBuffer = [],
+)
+{
+    return localAlignmentReader(lasFile, dbA, null, bufferMode, tracePointBuffer);
+}
+
+/// ditto
+LocalAlignmentReader localAlignmentReader(
+    in string lasFile,
+    in string dbA,
+    in string dbB,
+    BufferMode bufferMode = BufferMode.skip,
+    TracePoint[] tracePointBuffer = [],
+)
+{
+    if (
+        bufferMode.among(BufferMode.overwrite, BufferMode.preallocated) &&
+        tracePointBuffer.length == 0
+    )
+    {
+        auto alignmentStats = AlignmentStats.inferFrom(lasFile);
+
+        if (bufferMode == BufferMode.overwrite)
+            tracePointBuffer = uninitializedArray!(typeof(tracePointBuffer))(
+                alignmentStats.maxTracePoints,
+            );
+        else if (bufferMode == BufferMode.preallocated)
+            tracePointBuffer = uninitializedArray!(typeof(tracePointBuffer))(
+                alignmentStats.numTracePoints,
+            );
+    }
+
+    return new LocalAlignmentReader(
+        lasFile,
+        dbA,
+        dbB,
+        bufferMode,
+        tracePointBuffer,
+    );
+}
+
+
+/// Returns true if lasFile is empty
+bool isLasEmpty(in string lasFile)
+{
+    auto reader = localAlignmentReader(lasFile);
+
+    return reader.numLocalAlignments == 0;
+}
+
+unittest
+{
+    import dazzlib.util.tempfile;
+    import dazzlib.util.testdata;
+    import std.file;
+
+    auto lasFile = mkstemp("./.unittest-XXXXXX", ".las").name;
+    scope (exit)
+        remove(lasFile);
+
+    writeTestLas(lasFile);
+
+    assert(!isLasEmpty(lasFile));
+}
+
+unittest
+{
+    import dazzlib.util.tempfile;
+    import dazzlib.util.testdata;
+    import std.file;
+
+    auto lasFile = mkstemp("./.unittest-XXXXXX", ".las").name;
+    scope (exit)
+        remove(lasFile);
+
+    writeEmptyTestLas(lasFile);
+
+    assert(isLasEmpty(lasFile));
+}
+
+
+/// Validate LAS by reading the header. By default, empty LAS files are
+/// rejected because they are usually useless. This can be turned off using
+/// `allowEmpty`.
+///
+/// Returns: `null` if DB is valid; otherwise error message.
+string validateLas(in string lasFile, Flag!"allowEmpty" allowEmpty = No.allowEmpty)
+{
+    try
+    {
+        auto reader = localAlignmentReader(lasFile);
+
+        if (!reader.empty || allowEmpty)
+            return null;
+        else
+            return "empty LAS file";
+    }
+    catch (Exception e)
+    {
+        return e.msg;
+    }
+}
+
+unittest
+{
+    import dazzlib.util.tempfile;
+    import dazzlib.util.testdata;
+    import std.file;
+
+    auto lasFile = mkstemp("./.unittest-XXXXXX", ".las").name;
+    scope (exit)
+        remove(lasFile);
+
+    writeTestLas(lasFile);
+
+    assert(validateLas(lasFile) is null);
+}
+
+unittest
+{
+    import dazzlib.util.tempfile;
+    import dazzlib.util.testdata;
+    import std.file;
+
+    auto lasFile = mkstemp("./.unittest-XXXXXX", ".las").name;
+    scope (exit)
+        remove(lasFile);
+
+    writeEmptyTestLas(lasFile);
+
+    assert(validateLas(lasFile) !is null);
+    assert(validateLas(lasFile, Yes.allowEmpty) is null);
+}
+
+
 void writeAlignments(R)(const string lasFile, R localAlignments)
     if (isInputRange!R && is(const(ElementType!R) == const(LocalAlignment)))
 {

@@ -169,3 +169,11 @@ void writeTestLas(string filename)
 }
 
 
+void writeEmptyTestLas(string filename)
+{
+    enum emptyLasBase64 = `AAAAAAAAAABkAAAA`;
+
+    File(filename, "wb").rawWrite(Base64.decode(emptyLasBase64));
+}
+
+
