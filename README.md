@@ -11,12 +11,7 @@ Table of Contents
 
 - [Install](#install)
 - [Usage](#usage)
-- [Technical Details](#technical-details)
-    - [Pipeline](#pipeline)
-    - [File Formats](#file-formats)
-- [Citation](#citation)
 - [Maintainer](#maintainer)
-- [Contributing](#contributing)
 - [License](#license)
 
 
