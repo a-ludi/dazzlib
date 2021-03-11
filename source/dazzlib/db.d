@@ -228,80 +228,80 @@ class DazzDb
 
 
     /// Set to the type of DB dertermined by Open_DB.
-    @property DbType dbType() const pure nothrow @safe
+    @property DbType dbType() const pure nothrow @safe @nogc
     {
         return _dbType;
     }
 
 
     /// Total number of reads in untrimmed DB
-    @property id_t numReadsUntrimmed() const pure @safe
+    @property id_t numReadsUntrimmed() const pure @safe @nogc
     {
         return dazzDb.ureads.boundedConvert!(typeof(return));
     }
 
     /// Total number of reads in trimmed DB
-    @property id_t numReadsTrimmed() const pure @safe
+    @property id_t numReadsTrimmed() const pure @safe @nogc
     {
         return dazzDb.treads.boundedConvert!(typeof(return));
     }
 
     /// Minimum read length in block (-1 if not yet set)
-    @property arithmetic_t numReadsUntrimmed() const pure nothrow @safe
+    @property arithmetic_t numReadsUntrimmed() const pure nothrow @safe @nogc
     {
         return dazzDb.cutoff;
     }
 
     /// DB_ALL | DB_ARROW
-    @property BitFlags!Flag flags() const pure nothrow @safe
+    @property BitFlags!Flag flags() const pure nothrow @safe @nogc
     {
         return typeof(return)(dazzDb.allarr);
     }
 
     /// frequency of A, C, G, T, respectively
-    @property float[4] baseFrequency() const pure nothrow @safe
+    @property float[4] baseFrequency() const pure nothrow @safe @nogc
     {
         return dazzDb.freq;
     }
 
     /// length of maximum read (initially over all DB)
-    @property coord_t maxReadLength() const pure nothrow @safe
+    @property coord_t maxReadLength() const pure nothrow @safe @nogc
     {
         return dazzDb.maxlen.boundedConvert!(typeof(return));
     }
 
     /// total # of bases (initially over all DB)
-    @property size_t totalBps() const pure nothrow @safe
+    @property size_t totalBps() const pure nothrow @safe @nogc
     {
         return dazzDb.totlen.boundedConvert!(typeof(return));
     }
 
     /// # of reads in actively loaded portion of DB
-    @property id_t numReads() const pure nothrow @safe
+    @property id_t numReads() const pure nothrow @safe @nogc
     {
         return dazzDb.nreads.boundedConvert!(typeof(return));
     }
 
     /// DB has been trimmed by cutoff/all
-    @property bool isTrimmed() const pure nothrow @safe
+    @property bool isTrimmed() const pure nothrow @safe @nogc
     {
         return dazzDb.trimmed != 0;
     }
 
     /// DB block (if > 0), total DB (if == 0)
-    @property id_t block() const pure nothrow @safe
+    @property id_t block() const pure nothrow @safe @nogc
     {
         return dazzDb.part.boundedConvert!(typeof(return));
     }
 
     /// Index of first read in block (without trimming)
-    @property id_t firstReadUntrimmedPtr() const pure nothrow @safe
+    @property id_t firstReadUntrimmedPtr() const pure nothrow @safe @nogc
     {
         return dazzDb.ufirst.boundedConvert!(typeof(return));
     }
 
     /// Index of first read in block (with trimming)
-    @property id_t firstReadTrimmedPtr() const pure nothrow @safe
+    @property id_t firstReadTrimmedPtr() const pure nothrow @safe @nogc
     {
         return dazzDb.tfirst.boundedConvert!(typeof(return));
     }
@@ -313,19 +313,19 @@ class DazzDb
     }
 
     /// Are reads loaded in memory?
-    @property bool areReadsLoaded() const pure nothrow @safe
+    @property bool areReadsLoaded() const pure nothrow @safe @nogc
     {
         return dazzDb.loaded != 0;
     }
 
     /// Array of DAZZ_READ
-    @property DAZZ_READ[] reads() pure nothrow @trusted
+    @property inout(DAZZ_READ)[] reads() inout pure nothrow @trusted @nogc
     {
         return dazzDb.reads[0 .. numReads];
     }
 
     /// Linked list of loaded tracks
-    @property DAZZ_TRACK* tracksPtr() pure nothrow @safe
+    @property DAZZ_TRACK* tracksPtr() pure nothrow @safe @nogc
     {
         return dazzDb.tracks;
     }
