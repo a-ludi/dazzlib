@@ -3,7 +3,7 @@ dazzlib
 
 [![standard-readme compliant](https://img.shields.io/badge/readme%20style-standard-brightgreen.svg?style=flat)](https://github.com/RichardLitt/standard-readme)
 
-> Interface library for Dazzler file formats.
+> Interface library for Dazzler's binary file formats.
 
 
 Table of Contents
