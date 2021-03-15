@@ -8,7 +8,7 @@
     "name": "dazzlib",
     "targetType": "library",
     "preBuildCommands": [
-        "make -C external -f Makefile.DALIGNER $${DUB_FORCE:+--always-make} BUILD_TYPE=$BUILD_TYPE"
+        "make -C $PACKAGE_DIR/external -f Makefile.DALIGNER $${DUB_FORCE:+--always-make} BUILD_TYPE=$BUILD_TYPE"
     ],
     "libs": [
         "DALIGNER"
