@@ -247,7 +247,7 @@ class DazzDb
     }
 
     /// Minimum read length in block (-1 if not yet set)
-    @property arithmetic_t numReadsUntrimmed() const pure nothrow @safe @nogc
+    @property arithmetic_t cutoff() const pure nothrow @safe @nogc
     {
         return dazzDb.cutoff;
     }
