@@ -278,6 +278,45 @@ struct LocalAlignment
     }
 
 
+    ///
+    @property diff_t numDiffs() const pure nothrow @safe @nogc
+    {
+        return tracePoints.map!"a.numDiffs".sum;
+    }
+
+
+    int opCmp(ref const LocalAlignment other) const pure nothrow @safe @nogc
+    {
+        long cmp;
+
+        enum compare(string field) = q{
+            cmp = cast(long) this.}~field~q{ -
+                  cast(long) other.}~field~q{;
+
+            if (cmp != 0)
+                return cmp.boundedConvert!int;
+        };
+
+        mixin(compare!"contigA.contig.id");
+        mixin(compare!"contigB.contig.id");
+        mixin(compare!"flags.complement");
+        mixin(compare!"contigA.begin");
+        mixin(compare!"contigA.end");
+        mixin(compare!"contigB.begin");
+        mixin(compare!"contigB.end");
+        mixin(compare!"numDiffs");
+
+        return () @trusted {
+            if (&this < &other)
+                return -1;
+            else if (&this > &other)
+                return 1;
+            else
+                return 0;
+        }();
+    }
+
+
     /**
         Generate a cartoon of this alignment relative to `contig`. Every
         character in the cartoon corresponds to one trace point distance.
