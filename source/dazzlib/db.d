@@ -189,6 +189,7 @@ class DazzDb
     }
 
     private DAZZ_DB dazzDb;
+    private string _dbFile;
     private DbType _dbType;
 
 
@@ -203,6 +204,11 @@ class DazzDb
         dazzlibEnforce(result >= 0, currentError.idup);
 
         this._dbType = cast(DbType) result;
+
+        if (dbFile.endsWith(DbExtension.dam, DbExtension.db))
+            this._dbFile = dbFile;
+        else
+            this._dbFile = dbType == DbType.dam?  DbExtension.dam : DbExtension.db;
 
         if (trimDb)
             catchErrorMessage!Trim_DB(&dazzDb);
