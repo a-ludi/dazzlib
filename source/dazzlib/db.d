@@ -13,7 +13,10 @@ import dazzlib.core.c.DB;
 import dazzlib.util.exception;
 import dazzlib.util.math;
 import std.algorithm;
+import std.ascii;
+import std.conv;
 import std.format;
+import std.mmfile;
 import std.path;
 import std.stdio;
 import std.string;
@@ -332,6 +335,28 @@ class DazzDb
     @property DAZZ_TRACK* tracksPtr() pure nothrow @safe @nogc
     {
         return dazzDb.tracks;
+    }
+
+
+    /// Get the FASTA header of `reads[readIdx]`
+    string getContigHeader(size_t readIdx)
+    {
+        dazzlibEnforce(dbType == DbType.dam, "may only be called on a DAM");
+
+        static MmFile headerFile;
+
+        if (headerFile is null)
+            headerFile = new MmFile(cast(string) (dbName ~ DbExtension.headers));
+
+        // read MAX_NAME bytes at reads[readIdx].coff
+        auto headerOffset = reads[readIdx].coff;
+        auto headerBytes = cast(char[]) headerFile[headerOffset .. min(headerOffset + MAX_NAME, $)];
+
+        // chop off the leading '>'
+        if (headerBytes.length > 0 && headerBytes[0] == '>')
+            headerBytes = headerBytes[1 .. $];
+
+        return headerBytes.until(newline).to!string;
     }
 
 
