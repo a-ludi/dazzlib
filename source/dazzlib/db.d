@@ -19,17 +19,15 @@ import std.stdio;
 import std.string;
 import std.typecons;
 
-/// File suffixes of essential auxiliary .db files.
-enum auxiliaryDbFileSuffixes = [".bps", ".idx"];
-
-/// File suffixes of essential auxiliary .dam files.
-enum auxiliaryDamFileSuffixes = [".bps", ".hdr", ".idx"];
-
-/// Constant holding the .db file extension.
-enum dbFileExtension = ".db";
-
-/// Constant holding the .dam file extension.
-enum damFileExtension = ".dam";
+/// Collection of file extensions for DB-related files.
+struct DbExtension
+{
+    enum string db = ".db";
+    enum string dam = ".dam";
+    enum string basePairs = ".bps";
+    enum string index = ".idx";
+    enum string headers = ".hdr";
+}
 
 /// The Dazzler tools require sequence of a least minSequenceLength base pairs.
 enum minSequenceLength = 14;
@@ -48,9 +46,9 @@ struct EssentialDbFiles
         this.stub = stub;
         assert(isDb || isDam, "must use with Dazzler DB");
 
-        this.basePairs = auxiliaryFile(".bps");
-        this.index = auxiliaryFile(".idx");
-        this.headers = isDam?  auxiliaryFile(".hdr") : null;
+        this.basePairs = auxiliaryFile(DbExtension.basePairs);
+        this.index = auxiliaryFile(DbExtension.index);
+        this.headers = isDam?  auxiliaryFile(DbExtension.headers) : null;
     }
 
 
@@ -59,7 +57,7 @@ struct EssentialDbFiles
     {
         try
         {
-            return stub.endsWith(dbFileExtension);
+            return stub.endsWith(DbExtension.db);
         }
         catch (Exception e)
         {
@@ -82,7 +80,7 @@ struct EssentialDbFiles
     {
         try
         {
-            return stub.endsWith(damFileExtension);
+            return stub.endsWith(DbExtension.dam);
         }
         catch (Exception e)
         {
