@@ -333,6 +333,29 @@ class DazzDb
     {
         return dazzDb.tracks;
     }
+
+
+    /// Get number of reads in (un)trimmed dbFile without opening the entire DB.
+    static id_t numReads(string what = "trimmed")(string dbFile) if (what.among("trimmed", "untrimmed"))
+    {
+        auto dazzStub = Read_DB_Stub(dbFile.toStringz, StubPart.blocks);
+        dazzlibEnforce(dazzStub !is null, "DB stub cannot be read; is the DB split?");
+
+        scope (exit)
+            Free_DB_Stub(dazzStub);
+
+        static if (what == "trimmed")
+            auto indexPtr = dazzStub.tblocks;
+        else static if (what == "untrimmed")
+            auto indexPtr = dazzStub.ublocks;
+        else
+            static assert(0, "`what` must be \"trimmed\" or \"untrimmed\"");
+
+        auto blockIndex = indexPtr[0 .. dazzStub.nblocks];
+        auto numReads = blockIndex[$ - 1] - blockIndex[0];
+
+        return numReads;
+    }
 }
 
 
