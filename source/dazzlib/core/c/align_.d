@@ -185,9 +185,10 @@ struct Alignment
 /// Complement the sequence in fragment aseq.  The operation does the
 /// complementation/reversal in place.  Calling it a second time on a given
 /// fragment restores it to its original state.
-void Complement_Seq (char* a, int n);
+void Complement_Seq (char* a, int n) nothrow @nogc;
+
 /// ditto
-extern (D) void Complement_Seq (ref char[] a)
+extern (D) void Complement_Seq (ref char[] a) nothrow @nogc
 {
     Complement_Seq(a.ptr, cast(int) a.length);
 }
@@ -215,10 +216,10 @@ unittest
 alias Work_Data = void;
 
 /// ditto
-Work_Data* New_Work_Data ();
+Work_Data* New_Work_Data () nothrow @nogc;
 
 /// ditto
-void Free_Work_Data (Work_Data* work);
+void Free_Work_Data (Work_Data* work) nothrow @nogc;
 
 /**
     Local_Alignment seeks local alignments of a quality determined by a number
@@ -254,22 +255,22 @@ void Free_Work_Data (Work_Data* work);
 alias Align_Spec = void;
 
 /// ditto
-Align_Spec* New_Align_Spec (double ave_corr, int trace_space, float* freq, int reach);
+Align_Spec* New_Align_Spec (double ave_corr, int trace_space, float* freq, int reach) nothrow @nogc;
 
 /// ditto
-void Free_Align_Spec (Align_Spec* spec);
+void Free_Align_Spec (Align_Spec* spec) nothrow @nogc;
 
 /// ditto
-int Trace_Spacing (Align_Spec* spec);
+int Trace_Spacing (Align_Spec* spec) nothrow @nogc;
 
 /// ditto
-double Average_Correlation (Align_Spec* spec);
+double Average_Correlation (Align_Spec* spec) nothrow @nogc;
 
 /// ditto
-float* Base_Frequencies (Align_Spec* spec);
+float* Base_Frequencies (Align_Spec* spec) nothrow @nogc;
 
 /// ditto
-int Overlap_If_Possible (Align_Spec* spec);
+int Overlap_If_Possible (Align_Spec* spec) nothrow @nogc;
 
 
 /**
@@ -310,7 +311,7 @@ Path* Local_Alignment (
     int hgh,
     int anti,
     int lbord,
-    int hbord);
+    int hbord) nothrow @nogc;
 
 /// ditto
 int Find_Extension (
@@ -321,7 +322,7 @@ int Find_Extension (
     int anti,
     int lbord,
     int hbord,
-    int prefix);
+    int prefix) nothrow @nogc;
 
 
 /// Possible modes for "mode" parameter below)
@@ -354,10 +355,10 @@ enum ComputeTraceMode : int
     Compute_Trace_PTS, but it produces nearer optimal alignments.  Both these
     routines return 1 if an error occurred and 0 otherwise.
 */
-int Compute_Trace_PTS (Alignment* align_, Work_Data* work, int trace_spacing, ComputeTraceMode mode);
+int Compute_Trace_PTS (Alignment* align_, Work_Data* work, int trace_spacing, ComputeTraceMode mode) nothrow @nogc;
 
 /// ditto
-int Compute_Trace_MID (Alignment* align_, Work_Data* work, int trace_spacing, ComputeTraceMode mode);
+int Compute_Trace_MID (Alignment* align_, Work_Data* work, int trace_spacing, ComputeTraceMode mode) nothrow @nogc;
 
 
 /**
@@ -368,7 +369,7 @@ int Compute_Trace_MID (Alignment* align_, Work_Data* work, int trace_spacing, Co
     between the trace points.  This routine is experimental and may not
     persist in later versions of the code.
 */
-int Compute_Trace_IRR (Alignment* align_, Work_Data* work, ComputeTraceMode mode);
+int Compute_Trace_IRR (Alignment* align_, Work_Data* work, ComputeTraceMode mode) nothrow @nogc;
 
 
 /// Determine task of Compute_Alignment.
@@ -404,7 +405,7 @@ enum ComputeAlignmentTask : int
     sequences, in which case a little efficiency is gained by avoiding the
     repetition of the top level search for an optimal mid-point.
 */
-int Compute_Alignment (Alignment* align_, Work_Data* work, ComputeAlignmentTask task, int trace_spacing);
+int Compute_Alignment (Alignment* align_, Work_Data* work, ComputeAlignmentTask task, int trace_spacing) nothrow @nogc;
 
 
 /**
@@ -435,7 +436,7 @@ int Compute_Alignment (Alignment* align_, Work_Data* work, ComputeAlignmentTask 
     full is off then the trace is ignored, otherwise the trace must be to a
     full alignment trace and this trace is also appropriately inverted.
 */
-void Alignment_Cartoon (FILE* file, Alignment* align_, int indent, int coord);
+void Alignment_Cartoon (FILE* file, Alignment* align_, int indent, int coord) nothrow @nogc;
 
 /// ditto
 int Print_Alignment (
@@ -446,7 +447,7 @@ int Print_Alignment (
     int width,
     int border,
     int upper,
-    int coord);
+    int coord) nothrow @nogc;
 
 /// ditto
 int Print_Reference (
@@ -457,10 +458,10 @@ int Print_Reference (
     int block,
     int border,
     int upper,
-    int coord);
+    int coord) nothrow @nogc;
 
 /// ditto
-void Flip_Alignment (Alignment* align_, int full);
+void Flip_Alignment (Alignment* align_, int full) nothrow @nogc;
 
 /**
     Overlap abstraction.
@@ -494,24 +495,24 @@ struct Overlap
 
 /// Reads the next Overlap record from stream 'input', not including the trace
 /// (if any), and without modifying 'ovl's trace pointer.
-int Read_Overlap (FILE* input, Overlap* ovl);
+int Read_Overlap (FILE* input, Overlap* ovl) nothrow @nogc;
 
 /// Reads the ensuing trace into the memory pointed at by the trace field of
 /// 'ovl'.  It is assumed to be big enough to accommodate the trace where each
 /// value take 'tbytes' bytes (1 if uint8 or 2 if uint16).
-int Read_Trace (FILE* innput, Overlap* ovl, int tbytes);
+int Read_Trace (FILE* innput, Overlap* ovl, int tbytes) nothrow @nogc;
 
 
 /// Writes 'ovl' to stream 'output' followed by its trace vector (if any) that
 /// occupies 'tbytes' bytes per value.  It returns non-zero if there was an
 /// error writing.
-int Write_Overlap (FILE* output, Overlap* ovl, int tbytes);
+int Write_Overlap (FILE* output, Overlap* ovl, int tbytes) nothrow @nogc;
 
 
 /// Prints an ASCII version of the contents of 'ovl' to stream 'output' where
 /// the trace occupes 'tbytes' per value and the print out is indented from
 /// the left margin by 'indent' spaces.
-void Print_Overlap (FILE* output, Overlap* ovl, int tbytes, int indent);
+void Print_Overlap (FILE* output, Overlap* ovl, int tbytes, int indent) nothrow @nogc;
 
 
 /// Compress_TraceTo8 converts a trace fo 16-bit values to 8-bit values in
@@ -519,10 +520,10 @@ void Print_Overlap (FILE* output, Overlap* ovl, int tbytes, int indent);
 /// set in a call to Compress then it checks whether the values fit in 8-bits,
 /// and if not returns a non-zero result in interactive mode, or exits with an
 /// error message in batch mode.
-int Compress_TraceTo8 (Overlap* ovl, int check);
+int Compress_TraceTo8 (Overlap* ovl, int check) nothrow @nogc;
 
 /// ditto
-void Decompress_TraceTo16 (Overlap* ovl);
+void Decompress_TraceTo16 (Overlap* ovl) nothrow @nogc;
 
 
 /// Checks that the number of trace points is correct and that the sum of the
@@ -530,4 +531,4 @@ void Decompress_TraceTo16 (Overlap* ovl);
 /// trace spacing is 'tspace'.  It reports an error message if there is a
 /// problem and 'verbose' is non-zero.  The 'ovl' came from the file names
 /// 'fname'.
-int Check_Trace_Points (Overlap* ovl, int tspace, int verbose, char* fname);
+int Check_Trace_Points (Overlap* ovl, int tspace, int verbose, char* fname) nothrow @nogc;

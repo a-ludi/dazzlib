@@ -43,14 +43,14 @@ extern (D) @property char[] currentError() nothrow
 
 
 /// Clear Ebuffer.
-extern (D) void clearCurrentError() nothrow
+extern (D) void clearCurrentError() nothrow @nogc
 {
     Ebuffer[] = '\0';
 }
 
 
 /// Returns true if Ebuffer is not empty.
-extern (D) @property bool hasError() nothrow
+extern (D) @property bool hasError() nothrow @nogc
 {
     return Ebuffer[0] != '\0';
 }
@@ -126,25 +126,25 @@ struct DAZZ_READ
     }
 
 
-    @property int qv() const pure nothrow @safe
+    @property int qv() const pure nothrow @safe @nogc
     {
         return rawFlags & qvMask;
     }
 
 
-    @property void qv(int value) pure nothrow @safe
+    @property void qv(int value) pure nothrow @safe @nogc
     {
         rawFlags &= (rawFlags & ~qvMask) | (value & qvMask);
     }
 
 
-    @property BitFlags!Flag flags() const pure nothrow @safe
+    @property BitFlags!Flag flags() const pure nothrow @safe @nogc
     {
         return BitFlags!Flag(cast(Flag) (rawFlags & ~qvMask));
     }
 
 
-    @property void flags(BitFlags!Flag value) pure nothrow @safe
+    @property void flags(BitFlags!Flag value) pure nothrow @safe @nogc
     {
         rawFlags &= ((cast(int) value) & ~qvMask) | (rawFlags & qvMask);
     }
@@ -407,7 +407,7 @@ enum StubPart : int
 /// is assumed to be the complete name of the file. If all flags are off, then
 /// just the scalar parts of the stub are returned (i.e. nfiles, all, cutoff,
 /// bsize, nblocks). Returns NULL if an error occured in INTERACTIVE mode.
-DAZZ_STUB* Read_DB_Stub (cstring path, StubPart what);
+DAZZ_STUB* Read_DB_Stub (cstring path, StubPart what) @nogc;
 
 unittest
 {
@@ -488,11 +488,11 @@ unittest
 /// for block n, for the trimmed DB if trim is set, the untrimmed DB otherwise.
 /// If n is out of range first and last will be set to -1.  Returns 0 unless
 /// an error occurs in INTERACTIVE mode in which case it returns 1.
-int Fetch_Block_Range (cstring path, int trim, int n, int* first, int* last);
+int Fetch_Block_Range (cstring path, int trim, int n, int* first, int* last) @nogc;
 
 
 /// Free a DAZZ_STUB data structure returned by Read_DB_Stub
-void Free_DB_Stub (DAZZ_STUB* stub);
+void Free_DB_Stub (DAZZ_STUB* stub) @nogc;
 
 
 /// Open the given database or dam, "path", into the supplied DAZZ_DB record
@@ -504,17 +504,17 @@ void Free_DB_Stub (DAZZ_STUB* stub);
 ///       to EPLACE
 ///     - `0`: Open of DB proceeded without mishap
 ///     - `1`: Open of DAM proceeded without mishap
-int Open_DB (cstring path, DAZZ_DB* db);
+int Open_DB (cstring path, DAZZ_DB* db) @nogc;
 
 
 /// Trim the DB or part thereof and all loaded tracks according to the cutoff
 /// and all settings of the current DB partition.  Reallocate smaller memory
 /// blocks for the information kept for the retained reads.
-void Trim_DB (DAZZ_DB* db);
+void Trim_DB (DAZZ_DB* db) @nogc;
 
 
 /// Return the size in bytes of the given DB
-int64 sizeof_DB (DAZZ_DB* db);
+int64 sizeof_DB (DAZZ_DB* db) @nogc;
 
 
 /// For the DB or DAM "path" = "prefix/root.[db|dam]", find all the files for
@@ -532,13 +532,13 @@ int64 sizeof_DB (DAZZ_DB* db);
 ///     - `1`: if an error (reported to EPLACE) occured and INTERACTIVE is
 ///       defined.
 ///     - `0`: Otherwise.
-int List_DB_Files (cstring path, void function (cstring path, cstring extension) actor);
+int List_DB_Files (cstring path, void function (cstring path, cstring extension) actor) @nogc;
 
 
 /// Shut down an open 'db' by freeing all associated space, including tracks
 /// and QV structures, and any open file pointers.  The record pointed at by
 /// db however remains (the user supplied it and so should free it).
-void Close_DB (DAZZ_DB* db);
+void Close_DB (DAZZ_DB* db) @nogc;
 
 
 /// Allocate and return a buffer big enough for the largest read in 'db'.
@@ -546,7 +546,7 @@ void Close_DB (DAZZ_DB* db);
 /// (4)-byte are needed by the alignment algorithms. If cannot allocate memory
 /// then return NULL if INTERACTIVE is defined, or print error to stderr and
 /// exit otherwise.
-char* New_Read_Buffer (DAZZ_DB* db);
+char* New_Read_Buffer (DAZZ_DB* db) @nogc;
 
 
 /// Load into 'read' the i'th read in 'db'.  As a lower case ascii string if
@@ -555,7 +555,7 @@ char* New_Read_Buffer (DAZZ_DB* db);
 /// appended to the string so it has a delimeter for traversals in either
 /// direction.  A non-zero value is returned if an error occured and
 /// INTERACTIVE is defined.
-int Load_Read (DAZZ_DB* db, int i, char* read, int ascii);
+int Load_Read (DAZZ_DB* db, int i, char* read, int ascii) @nogc;
 
 
 /// Load into 'read' the subread [beg,end] of the i'th read in 'db' and return
@@ -566,7 +566,7 @@ int Load_Read (DAZZ_DB* db, int i, char* read, int ascii);
 /// holding the substring so it has a delimeter for traversals in either
 /// direction. A NULL pointer is returned if an error occured and INTERACTIVE
 /// is defined.
-char* Load_Subread (DAZZ_DB* db, int i, int beg, int end, char* read, int ascii);
+char* Load_Subread (DAZZ_DB* db, int i, int beg, int end, char* read, int ascii) @nogc;
 
 
 /// Allocate a block big enough for all the uncompressed read sequences and
@@ -574,7 +574,7 @@ char* Load_Subread (DAZZ_DB* db, int i, int beg, int end, char* read, int ascii)
 /// record to be its in-memory offset, and set the bases pointer to point at
 /// the block after closing the bases file.  Return with a zero, except when
 /// an error occurs and INTERACTIVE is defined in which case return wtih 1.
-int Load_All_Reads (DAZZ_DB* db, int ascii);
+int Load_All_Reads (DAZZ_DB* db, int ascii) @nogc;
 
 
 /// If the Arrow pseudo track is not already in db's track list, then load it
@@ -582,13 +582,13 @@ int Load_All_Reads (DAZZ_DB* db, int ascii);
 /// Load_All_Reads yet. -1 is returned if a .arw file is not present, and 1
 /// is returned if an error (reported to EPLACE) occured and INTERACTIVE is
 /// defined.  Otherwise a 0 is returned.
-int Open_Arrow (DAZZ_DB* db);
+int Open_Arrow (DAZZ_DB* db) @nogc;
 
 
 /// Exactly the same as Load_Read, save the arrow information is loaded, not
 /// the DNA sequence, and there is only a choice between numeric (0) or
 /// ascii (1);
-int Load_Arrow (DAZZ_DB* db, int i, char* read, int ascii);
+int Load_Arrow (DAZZ_DB* db, int i, char* read, int ascii) @nogc;
 
 
 /// Allocate a block big enough for all the uncompressed Arrow vectors, read
@@ -596,12 +596,12 @@ int Load_Arrow (DAZZ_DB* db, int i, char* read, int ascii);
 /// offset, and set the arrow pointer to point at the block after closing the
 /// arrow file. If ascii is non-zero then the arrows are converted to 0123
 /// ascii, otherwise the arrows are left as numeric strings over [0-3].
-int Load_All_Arrows (DAZZ_DB* db, int ascii);
+int Load_All_Arrows (DAZZ_DB* db, int ascii) @nogc;
 
 
 /// Remove the Arrow pseudo track, all space associated with it, and close
 /// the .arw file.
-void Close_Arrow (DAZZ_DB*);
+void Close_Arrow (DAZZ_DB*) @nogc;
 
 
 /// Type of track
@@ -623,7 +623,7 @@ enum TrackKind : int
 ///     - '0': Track is for untrimmed DB
 ///     - '-1': Track is not the right size of DB either trimmed or untrimmed
 ///     - '-2': Could not find the track
-int Check_Track (DAZZ_DB* db, cstring track, TrackKind* kind);
+int Check_Track (DAZZ_DB* db, cstring track, TrackKind* kind) @nogc;
 
 
 /// If track is not already in the db's track list, then allocate all the
@@ -633,19 +633,19 @@ int Check_Track (DAZZ_DB* db, cstring track, TrackKind* kind);
 /// reason, then NULL is returned if INTERACTIVE is defined.  Otherwise the
 /// routine prints an error message to stderr and exits if an error occurs,
 /// and returns with NULL only if the track does not exist.
-DAZZ_TRACK* Open_Track (DAZZ_DB* db, cstring track);
+DAZZ_TRACK* Open_Track (DAZZ_DB* db, cstring track) @nogc;
 
 
 /// Allocate a data buffer large enough to hold the longest read data block
 /// that will occur in the track.  If cannot allocate memory then return
 /// NULL if INTERACTIVE is defined, or print error to stderr and exit
 /// otherwise.
-void* New_Track_Buffer (DAZZ_TRACK* track);
+void* New_Track_Buffer (DAZZ_TRACK* track) @nogc;
 
 /// Load into 'data' the read data block for read i's "track" data.  Return
 /// the length of the data in bytes, unless an error occurs and INTERACTIVE
 /// is defined in which case return wtih -1.
-int Load_Track_Data (DAZZ_TRACK* track, int i, void* data);
+int Load_Track_Data (DAZZ_TRACK* track, int i, void* data) @nogc;
 
 
 /// Allocate a block big enough for all the track data and read the data
@@ -653,7 +653,7 @@ int Load_Track_Data (DAZZ_TRACK* track, int i, void* data);
 /// offset, and set the data pointer to point at the block after closing the
 /// data file.  Return with a zero, except when an error occurs and
 /// INTERACTIVE is defined in which case return wtih 1.
-int Load_All_Track_Data (DAZZ_TRACK* track);
+int Load_All_Track_Data (DAZZ_TRACK* track) @nogc;
 
 
 /// Assumming file pointer for afile is correctly positioned at the start of
@@ -667,25 +667,25 @@ int Load_All_Track_Data (DAZZ_TRACK* track);
 ///     - `0` if item was read and folded correctly,
 ///     - `-1` if there was a system IO or allocation error (if interactive), and
 ///     - `-2` if the new value could not be reduced into the current value of extra (interactive)
-int Read_Extra (FILE* afile, cstring aname, DAZZ_EXTRA* extra);
+int Read_Extra (FILE* afile, cstring aname, DAZZ_EXTRA* extra) @nogc;
 
 
 /// Write extra record to end of file afile and advance write pointer If
 /// interactive, then return non-zero on error, if batch, then print and halt
 /// if an error
-int Write_Extra (FILE* afile, DAZZ_EXTRA* extra);
+int Write_Extra (FILE* afile, DAZZ_EXTRA* extra) @nogc;
 
 
 /// If track is on the db's track list, then it is removed and all storage
 /// associated with it is freed.
-void Close_Track (DAZZ_DB* db, DAZZ_TRACK* track);
+void Close_Track (DAZZ_DB* db, DAZZ_TRACK* track) @nogc;
 
 
 /// If QV pseudo track is not already in db's track list, then load it and
 /// set it up. The database must not have been trimmed yet.  -1 is returned
 /// if a .qvs file is not present, and 1 is returned if an error (reported to
 /// EPLACE) occured and INTERACTIVE is defined.  Otherwise a 0 is returned.
-int Open_QVs (DAZZ_DB* db);
+int Open_QVs (DAZZ_DB* db) @nogc;
 
 
 /// QV line index.
@@ -709,15 +709,15 @@ enum QvLineIndex : size_t
 /// that will occur in the database.  If cannot allocate memory then return
 /// NULL if INTERACTIVE is defined, or print error to stderr and exit
 /// otherwise.
-char** New_QV_Buffer (DAZZ_DB* db);
+char** New_QV_Buffer (DAZZ_DB* db) @nogc;
 
 /// Load into 'entry' the 5 QV vectors for i'th read in 'db'.  The deletion
 /// tag or characters are converted to a numeric or upper/lower case ascii
 /// string as per ascii.  Return with a zero, except when an error occurs and
 /// INTERACTIVE is defined in which case return wtih 1.
-int Load_QVentry (DAZZ_DB* db, int i, char** entry, int ascii);
+int Load_QVentry (DAZZ_DB* db, int i, char** entry, int ascii) @nogc;
 
 
 /// Remove the QV pseudo track, all space associated with it, and close the
 /// .qvs file.
-void Close_QVs (DAZZ_DB* db);
+void Close_QVs (DAZZ_DB* db) @nogc;
