@@ -13,7 +13,9 @@ version (unittest):
 import dazzlib.alignments;
 import dazzlib.basictypes;
 import dazzlib.db;
+import dazzlib.core.c.DB;
 import std.algorithm;
+import std.array;
 import std.ascii;
 import std.base64;
 import std.format;
@@ -106,6 +108,74 @@ void writeTestDb(string stubFilename)
     File(dbFiles.stub, "wb").rawWrite(Base64.decode(dbStubBase64));
     File(dbFiles.basePairs, "wb").rawWrite(Base64.decode(dbBasePairsBase64));
     File(dbFiles.index, "wb").rawWrite(Base64.decode(dbIndexBase64));
+}
+
+
+@property coord_t[][] testMaskData() pure
+{
+    auto fakeIntervals = (id_t id, coord_t length) => id % 2 == 0
+        ? [id, length]
+        : [0, length/2, length/2 + 1, length];
+
+    return [
+        fakeIntervals(1, 15),
+        fakeIntervals(2, 16),
+        fakeIntervals(3, 42),
+        fakeIntervals(4, 42),
+        fakeIntervals(5, 42),
+        fakeIntervals(6, 42),
+        fakeIntervals(7, 42),
+        fakeIntervals(8, 42),
+        fakeIntervals(9, 42),
+        fakeIntervals(10, 42),
+        fakeIntervals(11, 42),
+        fakeIntervals(12, 42),
+        fakeIntervals(13, 42),
+        fakeIntervals(14, 42),
+        fakeIntervals(15, 42),
+        fakeIntervals(16, 42),
+        fakeIntervals(17, 42),
+        fakeIntervals(18, 42),
+        fakeIntervals(19, 31),
+        fakeIntervals(20, 33),
+        fakeIntervals(21, 42),
+        fakeIntervals(22, 42),
+        fakeIntervals(23, 42),
+        fakeIntervals(24, 42),
+        fakeIntervals(25, 42),
+        fakeIntervals(26, 42),
+    ];
+}
+
+
+void writeTestMask(string stubFilename, string maskName)
+{
+    auto dbFiles = EssentialDbFiles(stubFilename);
+    auto annoFile = File(dbFiles.auxiliaryFile("."~maskName~".anno"), "wb");
+
+    auto numReads = cast(int) testMaskData.length;
+    auto size = 0;
+    int currentContig = 1;
+
+    annoFile.rawWrite([numReads, size]);
+    annoFile.rawWrite([int64(0)]);
+    annoFile.rawWrite(testMaskData
+        .cumulativeFold!((dataPointer, intervalsData) =>
+            dataPointer + cast(int64) (intervalsData.length * int.sizeof)
+        )(int64(0))
+        .array
+    );
+
+    auto dataFile = File(dbFiles.auxiliaryFile("."~maskName~".data"), "wb");
+    dataFile.rawWrite(testMaskData.join());
+
+    //enum annoBase64 = ``.removeWhitespace;
+    //enum dataBase64 = ``.removeWhitespace;
+
+    //auto dbFiles = EssentialDbFiles(stubFilename);
+
+    //File(dbFiles.auxiliaryFile("."~maskName~".anno"), "wb").rawWrite(Base64.decode(annoBase64));
+    //File(dbFiles.auxiliaryFile("."~maskName~".data"), "wb").rawWrite(Base64.decode(dataBase64));
 }
 
 
