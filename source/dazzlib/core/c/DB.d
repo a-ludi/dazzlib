@@ -623,6 +623,7 @@ enum TrackKind : int
 ///     - '0': Track is for untrimmed DB
 ///     - '-1': Track is not the right size of DB either trimmed or untrimmed
 ///     - '-2': Could not find the track
+@disable
 int Check_Track (DAZZ_DB* db, cstring track, TrackKind* kind) @nogc;
 
 
