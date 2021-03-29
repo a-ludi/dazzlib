@@ -11,11 +11,13 @@ module dazzlib.alignments;
 import dazzlib.basictypes;
 import dazzlib.core.c.DB;
 import dazzlib.core.c.align_;
+import dazzlib.db;
 import dazzlib.util.exception;
 import dazzlib.util.safeio;
 import dazzlib.util.math;
 import std.algorithm;
 import std.array;
+import std.ascii : toLower;
 import std.conv;
 import std.format;
 import std.range;
@@ -522,15 +524,11 @@ class LocalAlignmentReader
         if (db is null)
             return [];
 
-        DAZZ_DB dazzDb;
-        dazzlibEnforce(Open_DB(db.toStringz, &dazzDb) >= 0, currentError.idup);
-        scope (exit)
-            Close_DB(&dazzDb);
-        catchErrorMessage!Trim_DB(&dazzDb);
+        auto dazzDb = new DazzDb(db, Yes.trimDb);
 
         return dazzDb
-            .reads[0 .. dazzDb.nreads]
-            .map!(read => read.rlen.to!coord_t)
+            .reads
+            .map!(read => read.rlen.boundedConvert!coord_t)
             .array;
     }
 
@@ -653,7 +651,9 @@ protected:
         readOverlapHead();
         fillInOverlapHead();
         if (aLengths.length > 0)
-            fillInContigLengths();
+            fillInContigLength!'A'();
+        if (bLengths.length > 0)
+            fillInContigLength!'B'();
         auto traceLength = getTraceVectorLength();
 
         if (skipTracePoints)
@@ -698,24 +698,20 @@ protected:
     }
 
 
-    void fillInContigLengths() pure @safe
+    void fillInContigLength(char read)() pure @safe if (read.among('A', 'B'))
     {
-        if (aLengths.length > 0)
-        {
-            dazzlibEnforce(
-                currentLA.contigA.contig.id - 1 < aLengths.length,
-                format!"contigA.contig.id out of bounds: %d >= %d"(currentLA.contigA.contig.id - 1, aLengths.length),
-            );
-            currentLA.contigA.contig.length = aLengths[currentLA.contigA.contig.id - 1];
-        }
+        auto contig = mixin("&currentLA.contig" ~ read ~ ".contig");
+        auto contigLengths = mixin(read.toLower ~ "Lengths");
 
-        if (bLengths.length)
+        if (contigLengths.length > 0)
         {
             dazzlibEnforce(
-                currentLA.contigB.contig.id - 1 < bLengths.length,
-                format!"contigB.contig.id out of bounds: %d >= %d"(currentLA.contigB.contig.id - 1, bLengths.length),
+                contig.id - 1 < contigLengths.length,
+                format!("contig"~read~".contig.id out of bounds: %d >= %d")(
+                    contig.id - 1, contigLengths.length,
+                ),
             );
-            currentLA.contigB.contig.length = bLengths[currentLA.contigB.contig.id - 1];
+            contig.length = contigLengths[contig.id - 1];
         }
     }
 
