@@ -425,6 +425,9 @@ enum BufferMode : ubyte
 {
     /// Keep a single buffer and keep overwriting it with every new record.
     overwrite,
+    /// Keep two buffers and keep overwriting them in turn. This is useful
+    /// in combination with e.g. `std.algorithm.iteration.chunkBy`.
+    doubleBuffer,
     /// Allocate a new buffer for every record. Use an `Appender` if the
     /// number of records is unknown.
     dynamic,
@@ -511,6 +514,11 @@ class LocalAlignmentReader
                 tracePointBuffer.length > 0,
                 "buffer mode requires a preallocated buffer but none was supplied: "~
                 "please supply a preallocated buffer or adjust the mode according to your needs."
+            );
+        if (bufferMode == BufferMode.doubleBuffer)
+            assert(
+                tracePointBuffer.length % 2 == 0,
+                "buffer mode `doubleBuffer` requires double-sized buffer"
             );
         this.fullTracePointBuffer = tracePointBuffer;
         this.aLengths = aLengths;
@@ -649,6 +657,15 @@ protected:
 
     void readLocalAlignment()
     {
+        if (bufferMode == BufferMode.doubleBuffer)
+        {
+            // keep switching buffers
+            if (&tracePointBuffer[0] == &fullTracePointBuffer[0])
+                tracePointBuffer = fullTracePointBuffer[$/2 .. $];
+            else
+                tracePointBuffer = fullTracePointBuffer[0 .. $/2];
+        }
+
         readOverlapHead();
         fillInOverlapHead();
         if (aLengths.length > 0)
@@ -885,7 +902,7 @@ LocalAlignmentReader localAlignmentReader(
 )
 {
     if (
-        bufferMode.among(BufferMode.overwrite, BufferMode.preallocated) &&
+        bufferMode.among(BufferMode.overwrite, BufferMode.doubleBuffer, BufferMode.preallocated) &&
         tracePointBuffer.length == 0
     )
     {
@@ -894,6 +911,10 @@ LocalAlignmentReader localAlignmentReader(
         if (bufferMode == BufferMode.overwrite)
             tracePointBuffer = uninitializedArray!(typeof(tracePointBuffer))(
                 alignmentStats.maxTracePoints,
+            );
+        else if (bufferMode == BufferMode.doubleBuffer)
+            tracePointBuffer = uninitializedArray!(typeof(tracePointBuffer))(
+                2 * alignmentStats.maxTracePoints,
             );
         else if (bufferMode == BufferMode.preallocated)
             tracePointBuffer = uninitializedArray!(typeof(tracePointBuffer))(
