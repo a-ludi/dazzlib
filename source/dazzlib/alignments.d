@@ -1190,24 +1190,27 @@ struct AlignmentStats
         id_t numLocalAlignmentsSinceLastContig;
         id_t numTracePointsSinceLastContig;
         id_t numLocalAlignmentsInChain = 1;
+
+        alias updateMaxPerContig = () {
+            // udpate maxLocalAlignmentsPerContig
+            headerData.maxLocalAlignmentsPerContig = max(
+                headerData.maxLocalAlignmentsPerContig,
+                numLocalAlignmentsSinceLastContig,
+            );
+            numLocalAlignmentsSinceLastContig = 0;
+
+            // udpate maxTracePointsPerContig
+            headerData.maxTracePointsPerContig = max(
+                headerData.maxTracePointsPerContig,
+                numTracePointsSinceLastContig,
+            );
+            numTracePointsSinceLastContig = 0;
+        };
+
         foreach (localAlignment; localAlignments)
         {
             if (lastContig != localAlignment.contigA.contig.id)
-            {
-                // udpate maxLocalAlignmentsPerContig
-                headerData.maxLocalAlignmentsPerContig = max(
-                    headerData.maxLocalAlignmentsPerContig,
-                    numLocalAlignmentsSinceLastContig,
-                );
-                numLocalAlignmentsSinceLastContig = 0;
-
-                // udpate maxTracePointsPerContig
-                headerData.maxTracePointsPerContig = max(
-                    headerData.maxTracePointsPerContig,
-                    numTracePointsSinceLastContig,
-                );
-                numTracePointsSinceLastContig = 0;
-            }
+                updateMaxPerContig();
 
             ++headerData.numLocalAlignments;
             if (localAlignment.flags.start)
@@ -1233,6 +1236,8 @@ struct AlignmentStats
             numTracePointsSinceLastContig += localAlignment.numTracePoints;
             lastContig = localAlignment.contigA.contig.id;
         }
+
+        updateMaxPerContig();
 
         return headerData;
     }
