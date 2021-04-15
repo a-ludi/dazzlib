@@ -29,6 +29,7 @@ import std.typecons;
 
 ///
 public import dazzlib.core.c.align_ : LocalAlignmentFlag;
+public import dazzlib.util.math : RoundingMode;
 
 
 /// Typesafe structure for storing `LocalAlignmentFlag`s.
