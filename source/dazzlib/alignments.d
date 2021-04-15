@@ -288,6 +288,17 @@ struct LocalAlignment
     }
 
 
+    ///
+    @property size_t numTracePoints() const pure nothrow @safe @nogc
+    in (tracePointSpacing > 0, "tracePointSpacing requried to compute tracePointCount")
+    out (n; tracePoints.length == 0 || tracePoints.length == n,
+        "computed tracePointCount does not match")
+    {
+        return (ceil(contigA.end, tracePointSpacing) - floor(contigA.begin, tracePointSpacing)) /
+               tracePointSpacing;
+    }
+
+
     int opCmp(ref const LocalAlignment other) const pure nothrow @safe @nogc
     {
         long cmp;
@@ -615,14 +626,6 @@ class LocalAlignmentReader
     @property bool skipTracePoints() const pure nothrow @safe
     {
         return bufferMode == BufferMode.skip;
-    }
-
-
-    /// Number of trace points in `front`. This is useful if `skipTracePoints`
-    /// is true.
-    @property size_t currentNumTracePoints() const pure @safe
-    {
-        return (overlapHead.path.tlen / 2).to!size_t;
     }
 
 protected:
@@ -1220,21 +1223,14 @@ struct AlignmentStats
                 numLocalAlignmentsInChain = 0;
             ++numLocalAlignmentsInChain;
 
-            size_t currentNumTracePoints = localAlignment.tracePoints.length;
-
-            static if (is(typeof(localAlignments.currentNumTracePoints)))
-                if (currentNumTracePoints == 0)
-                    currentNumTracePoints = localAlignments.currentNumTracePoints;
-
-            headerData.numTracePoints += currentNumTracePoints;
-
+            headerData.numTracePoints += localAlignment.numTracePoints;
             headerData.maxTracePoints = max(
                 headerData.maxTracePoints,
-                currentNumTracePoints,
+                localAlignment.numTracePoints,
             );
 
             ++numLocalAlignmentsSinceLastContig;
-            numTracePointsSinceLastContig += currentNumTracePoints;
+            numTracePointsSinceLastContig += localAlignment.numTracePoints;
             lastContig = localAlignment.contigA.contig.id;
         }
 
