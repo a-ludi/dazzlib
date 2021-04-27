@@ -294,8 +294,10 @@ struct LocalAlignment
     out (n; tracePoints.length == 0 || tracePoints.length == n,
         "computed tracePointCount does not match")
     {
-        return (ceil(contigA.end, tracePointSpacing) - floor(contigA.begin, tracePointSpacing)) /
-               tracePointSpacing;
+        const firstTracePoint = floor(contigA.begin, tracePointSpacing);
+        const lastTracePoint = ceil(contigA.end, tracePointSpacing);
+
+        return max(1, (lastTracePoint - firstTracePoint) / tracePointSpacing);
     }
 
 
