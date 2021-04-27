@@ -28,6 +28,9 @@ import std.typecons;
 ///
 public import dazzlib.core.c.DB : TrackKind;
 
+///
+public import dazzlib.core.c.DB : SequenceFormat;
+
 
 /// Collection of file extensions for DB-related files.
 struct DbExtension
@@ -361,6 +364,107 @@ class DazzDb
     @property bool areReadsLoaded() const pure nothrow @safe @nogc
     {
         return dazzDb.loaded != 0;
+    }
+
+
+    /// Allocate and return a buffer big enough for the largest read in the
+    /// DB, leaving room for an initial delimiter character.
+    auto makeReadBuffer() const pure nothrow @safe
+    {
+        return makeReadBuffer(maxReadLength);
+    }
+
+
+    /// Allocate and return a buffer for the given number of base pairs,
+    /// leaving room for an initial delimiter character.
+    static auto makeReadBuffer(size_t numBaseBairs) pure nothrow @safe
+    {
+        auto fullBuffer = new char[numBaseBairs + 4UL];
+
+        // make value at index -1 accessible (required by DAZZLER routines)
+        return fullBuffer[1 .. $];
+    }
+
+    /// Load the i'th (sub)read in this DB. A new buffer will be allocated if
+    /// not given.
+    ///
+    /// Note, the byte at `buffer.ptr - 1` will be set to a delimiter
+    /// character and must be allocated! Use `makeReadBuffer` for that.
+    char[] loadRead(
+        id_t readId,
+        SequenceFormat seqFormat = SequenceFormat.init,
+        char[] buffer = [],
+    ) const
+    {
+        const readLength = reads[readId - 1].rlen.boundedConvert!coord_t;
+        if (buffer.length == 0)
+            buffer = makeReadBuffer(readLength);
+
+        const result = Load_Read(&dazzDb, readId - 1, buffer.ptr, seqFormat);
+        dazzlibEnforce(result == 0, currentError.idup);
+
+        return buffer[0 .. readLength];
+    }
+
+    /// ditto
+    char[] loadRead(
+        id_t readId,
+        coord_t begin,
+        coord_t end,
+        SequenceFormat seqFormat = SequenceFormat.init,
+        char[] buffer = [],
+    ) const
+    in (begin < end, format!"Selected empty read slice: %d .. %d"(begin, end))
+    in (end <= reads[readId - 1].rlen, format!"end is out of bounds: %d > %d"(end, reads[readId - 1].rlen))
+    {
+        const subreadLength = end - begin;
+        if (buffer.length == 0)
+            buffer = makeReadBuffer(subreadLength);
+
+        const result = Load_Subread(&dazzDb, readId - 1, begin, end, buffer.ptr, seqFormat);
+        dazzlibEnforce(result !is null, currentError.idup);
+        assert(
+            buffer.ptr <= result && result < buffer.ptr + 4,
+            "sequence pointer out of bounds",
+        );
+        const offset = result - buffer.ptr;
+
+        return buffer[offset .. subreadLength + offset];
+    }
+
+    unittest
+    {
+        import dazzlib.util.tempfile;
+        import dazzlib.util.testdata;
+        import std.exception;
+        import std.file;
+        import std.algorithm;
+
+        auto tmpDir = mkdtemp("./.unittest-XXXXXX");
+        scope (exit)
+            rmdirRecurse(tmpDir);
+
+        auto dbFile = buildPath(tmpDir, "test.db");
+
+        writeTestDb(dbFile);
+
+        auto dazzDb = new DazzDb(dbFile);
+
+        foreach (i, expSequence; testSequences)
+            assert(dazzDb.loadRead(cast(id_t) i + 1, SequenceFormat.asciiLower) == expSequence);
+
+        foreach (i, expSequence; testSequences)
+        {
+            const begin = cast(coord_t) (i % 2 == 0 ? i                  : 0);
+            const end   = cast(coord_t) (i % 2 == 0 ? expSequence.length : i);
+
+            assert(dazzDb.loadRead(
+                cast(id_t) i + 1,
+                begin,
+                end,
+                SequenceFormat.asciiLower,
+            ) == expSequence[begin .. end]);
+        }
     }
 
     /// Array of DAZZ_READ
@@ -1073,3 +1177,137 @@ enum TrackFor : int
 //{
 //    new DazzDb(dbFile).validateTrack()
 //}
+
+/// Convert sequence to numeric/ascii representation.
+alias toNumeric = toAlphabet!"\0\1\2\3\4";
+
+/// ditto
+alias toLowerAscii = toAlphabet!"acgt\0";
+
+/// ditto
+alias toUpperAscii = toAlphabet!"ACGT\0";
+
+
+/// Convert sequence to given alphabet. Note, works only for numeric- or
+/// ascii-encoded input sequences.
+void toAlphabet(char[5] alphabet)(char[] sequence) pure nothrow @nogc
+in (
+    (*(sequence.ptr - 1)).among('\0', '\4', alphabet[4]) &&
+    *(sequence.ptr - 1) == *(sequence.ptr + sequence.length),
+    "sequence must be terminated"
+)
+out (;
+    *(sequence.ptr - 1) == alphabet[4] &&
+    *(sequence.ptr - 1) == *(sequence.ptr + sequence.length),
+    "transformed sequence must be terminated"
+)
+{
+    // set terminators
+    *(sequence.ptr - 1) = alphabet[4];
+    *(sequence.ptr + sequence.length) = alphabet[4];
+
+    foreach (ref c; sequence)
+        switch (c)
+        {
+            case 0:
+            case 'a':
+            case 'A':
+                c = alphabet[0];
+                break;
+            case 1:
+            case 'c':
+            case 'C':
+                c = alphabet[1];
+                break;
+            case 2:
+            case 'g':
+            case 'G':
+                c = alphabet[2];
+                break;
+            case 3:
+            case 't':
+            case 'T':
+                c = alphabet[3];
+                break;
+            default:
+                c = alphabet[0];
+                assert(0, "illegal char");
+        }
+}
+
+unittest
+{
+    enum asciiLowerSeq = "\0tctcacctcgatccccctagcactctaatattacagcgttca\0";
+    enum asciiUpperSeq = "\0TCTCACCTCGATCCCCCTAGCACTCTAATATTACAGCGTTCA\0";
+    enum numericSeq = "43131011312031111130210131300303301021233104".map!"cast(char) (a - '0')".array;
+    enum numericAsciiSeq = "Z313101131203111113021013130030330102123310Z";
+
+    char[] seq;
+    static foreach (iseq; [asciiLowerSeq, asciiUpperSeq, numericSeq])
+    {
+        seq = iseq.dup[1 .. $ - 1];
+        seq.toLowerAscii();
+        assert(seq == asciiLowerSeq[1 .. $ - 1]);
+
+        seq = iseq.dup[1 .. $ - 1];
+        seq.toUpperAscii();
+        assert(seq == asciiUpperSeq[1 .. $ - 1]);
+
+        seq = iseq.dup[1 .. $ - 1];
+        seq.toNumeric();
+        assert(seq == numericSeq[1 .. $ - 1]);
+
+        seq = iseq.dup[1 .. $ - 1];
+        seq.toAlphabet!"0123Z"();
+        assert(seq == numericAsciiSeq[1 .. $ - 1]);
+    }
+}
+
+
+/// Convert sequence from given alphabet to numeric.
+void fromAlphabet(char[5] alphabet)(char[] sequence) pure nothrow @nogc
+in (
+    *(sequence.ptr - 1) == alphabet[4] &&
+    *(sequence.ptr - 1) == *(sequence.ptr + sequence.length),
+    "sequence must be terminated"
+)
+out (;
+    *(sequence.ptr - 1) == 4 &&
+    *(sequence.ptr - 1) == *(sequence.ptr + sequence.length),
+    "transformed sequence must be terminated"
+)
+{
+    // set terminators
+    *(sequence.ptr - 1) = 4;
+    *(sequence.ptr + sequence.length) = 4;
+
+    foreach (ref c; sequence)
+        switch (c)
+        {
+            case alphabet[0]:
+                c = 0;
+                break;
+            case alphabet[1]:
+                c = 1;
+                break;
+            case alphabet[2]:
+                c = 2;
+                break;
+            case alphabet[3]:
+                c = 3;
+                break;
+            default:
+                c = 0;
+                assert(0, "illegal char");
+        }
+}
+
+unittest
+{
+    enum numericAsciiSeq = "Z313101131203111113021013130030330102123310Z";
+    enum numericSeq = "43131011312031111130210131300303301021233104".map!"cast(char) (a - '0')".array;
+
+    auto seq = numericAsciiSeq.dup[1 .. $ - 1];
+    seq.fromAlphabet!"0123Z"();
+    assert(seq == numericSeq[1 .. $ - 1]);
+}

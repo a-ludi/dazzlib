@@ -19,6 +19,7 @@ import std.array;
 import std.ascii;
 import std.base64;
 import std.format;
+import std.random;
 import std.range;
 import std.stdio;
 import std.string;
@@ -30,43 +31,62 @@ private string removeWhitespace(string base64)
 }
 
 
-@property string[] testFastaRecords() pure
+@property string[] testSequences() pure
 {
-    auto fakeSeq = (coord_t length) => cast(string) iota(length).map!"'a'".array;
-    auto fakeRead = (id_t id, coord_t length) => format!">faked/%d/0_%d RQ=0.85\n%s"(
-        id,
-        id,
-        fakeSeq(length),
-    );
+    // get a reproducable pseudo-random sequence
+    auto random = Random(0x0a46e94eU);
+    auto fakeSeq = (coord_t length) => cast(string) iota(length)
+        .map!(i => uniform(0, 4, random).predSwitch(
+            0, 'a',
+            1, 'c',
+            2, 'g',
+               't',
+        ))
+        .array;
 
     return [
-        fakeRead(1, 15),
-        fakeRead(2, 16),
-        fakeRead(3, 42),
-        fakeRead(4, 42),
-        fakeRead(5, 42),
-        fakeRead(6, 42),
-        fakeRead(7, 42),
-        fakeRead(8, 42),
-        fakeRead(9, 42),
-        fakeRead(10, 42),
-        fakeRead(11, 42),
-        fakeRead(12, 42),
-        fakeRead(13, 42),
-        fakeRead(14, 42),
-        fakeRead(15, 42),
-        fakeRead(16, 42),
-        fakeRead(17, 42),
-        fakeRead(18, 42),
-        fakeRead(19, 31),
-        fakeRead(20, 33),
-        fakeRead(21, 42),
-        fakeRead(22, 42),
-        fakeRead(23, 42),
-        fakeRead(24, 42),
-        fakeRead(25, 42),
-        fakeRead(26, 42),
+        fakeSeq(15),
+        fakeSeq(16),
+        fakeSeq(42),
+        fakeSeq(42),
+        fakeSeq(42),
+        fakeSeq(42),
+        fakeSeq(42),
+        fakeSeq(42),
+        fakeSeq(42),
+        fakeSeq(42),
+        fakeSeq(42),
+        fakeSeq(42),
+        fakeSeq(42),
+        fakeSeq(42),
+        fakeSeq(42),
+        fakeSeq(42),
+        fakeSeq(42),
+        fakeSeq(42),
+        fakeSeq(31),
+        fakeSeq(33),
+        fakeSeq(42),
+        fakeSeq(42),
+        fakeSeq(42),
+        fakeSeq(42),
+        fakeSeq(42),
+        fakeSeq(42),
     ];
+}
+
+
+@property string[] testFastaRecords() pure
+{
+    auto fakeRead = (id_t id, string sequence) => format!">faked/%d/0_%d RQ=0.85\n%s"(
+        id,
+        id,
+        sequence,
+    );
+
+    return testSequences
+        .enumerate(1)
+        .map!(enumSeq => fakeRead(enumSeq.index, enumSeq.value))
+        .array;
 }
 
 
@@ -78,10 +98,10 @@ void writeTestDb(string stubFilename)
         NiAgICAgICAgMjYK
     `.removeWhitespace;
     enum dbBasePairsBase64 = `
-        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+        JtqoHNH+KMrdF2NVckdwzxJvQNrul2DMmpK2bUrQISP/yWjO9vBKQIAgOSfu9l7mqJfo0AIVj3hd4/02KClgq1Ae58UK
+        BkcW2eAG68k/gv7SPlkwUBRa9t++vsel7uHAjn2rzeasP9TZt2D5/NmfQmDneePIwCfzDjVpAiCP0ugA11ATc2MQGjyT
+        LhD7YKYRWLLKIXx0IHeRXS924Zac1CtArxMQBXsnSrvFHLB2Kih6JKd7EpaFwDOTbu2TwZD4kUWQeQEoiDTA/2xPqV6N
+        IU3b9FBoU2XqIn50J0THgNfVjFV93khnBrWwyGOVUZ0ycGDveCCJGEqqW97bLUZccEx8PKP6wjJAzGlw
     `.removeWhitespace;
     enum dbIndexBase64 = `
         GgAAABoAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAqAAAAAAAAAPsDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA

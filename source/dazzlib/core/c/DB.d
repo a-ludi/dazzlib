@@ -541,12 +541,25 @@ int List_DB_Files (cstring path, void function (cstring path, cstring extension)
 void Close_DB (DAZZ_DB* db) @nogc;
 
 
+/// Select format of returned sequences.
+enum SequenceFormat : int
+{
+    /// Numeric string over 0(A), 1(C), 2(G), and 3(T).
+    numeric = 0,
+    /// Lower case ascii string.
+    asciiLower = 1,
+    /// Upper case ascii string. This will fall back
+    /// to numeric for Arrow strings.
+    asciiUpper = 2,
+}
+
+
 /// Allocate and return a buffer big enough for the largest read in 'db'.
 /// **NB** free(x-1) if x is the value returned as *prefix* and suffix '\0'
 /// (4)-byte are needed by the alignment algorithms. If cannot allocate memory
 /// then return NULL if INTERACTIVE is defined, or print error to stderr and
 /// exit otherwise.
-char* New_Read_Buffer (DAZZ_DB* db) @nogc;
+char* New_Read_Buffer (const DAZZ_DB* db) @nogc;
 
 
 /// Load into 'read' the i'th read in 'db'.  As a lower case ascii string if
@@ -555,7 +568,7 @@ char* New_Read_Buffer (DAZZ_DB* db) @nogc;
 /// appended to the string so it has a delimeter for traversals in either
 /// direction.  A non-zero value is returned if an error occured and
 /// INTERACTIVE is defined.
-int Load_Read (DAZZ_DB* db, int i, char* read, int ascii) @nogc;
+int Load_Read (const DAZZ_DB* db, int i, char* read, SequenceFormat ascii) @nogc;
 
 
 /// Load into 'read' the subread [beg,end] of the i'th read in 'db' and return
@@ -566,7 +579,7 @@ int Load_Read (DAZZ_DB* db, int i, char* read, int ascii) @nogc;
 /// holding the substring so it has a delimeter for traversals in either
 /// direction. A NULL pointer is returned if an error occured and INTERACTIVE
 /// is defined.
-char* Load_Subread (DAZZ_DB* db, int i, int beg, int end, char* read, int ascii) @nogc;
+char* Load_Subread (const DAZZ_DB* db, int i, int beg, int end, char* read, SequenceFormat ascii) @nogc;
 
 
 /// Allocate a block big enough for all the uncompressed read sequences and
@@ -574,7 +587,7 @@ char* Load_Subread (DAZZ_DB* db, int i, int beg, int end, char* read, int ascii)
 /// record to be its in-memory offset, and set the bases pointer to point at
 /// the block after closing the bases file.  Return with a zero, except when
 /// an error occurs and INTERACTIVE is defined in which case return wtih 1.
-int Load_All_Reads (DAZZ_DB* db, int ascii) @nogc;
+int Load_All_Reads (DAZZ_DB* db, SequenceFormat ascii) @nogc;
 
 
 /// If the Arrow pseudo track is not already in db's track list, then load it
@@ -588,7 +601,7 @@ int Open_Arrow (DAZZ_DB* db) @nogc;
 /// Exactly the same as Load_Read, save the arrow information is loaded, not
 /// the DNA sequence, and there is only a choice between numeric (0) or
 /// ascii (1);
-int Load_Arrow (DAZZ_DB* db, int i, char* read, int ascii) @nogc;
+int Load_Arrow (DAZZ_DB* db, int i, char* read, SequenceFormat ascii) @nogc;
 
 
 /// Allocate a block big enough for all the uncompressed Arrow vectors, read
@@ -596,7 +609,7 @@ int Load_Arrow (DAZZ_DB* db, int i, char* read, int ascii) @nogc;
 /// offset, and set the arrow pointer to point at the block after closing the
 /// arrow file. If ascii is non-zero then the arrows are converted to 0123
 /// ascii, otherwise the arrows are left as numeric strings over [0-3].
-int Load_All_Arrows (DAZZ_DB* db, int ascii) @nogc;
+int Load_All_Arrows (DAZZ_DB* db, SequenceFormat ascii) @nogc;
 
 
 /// Remove the Arrow pseudo track, all space associated with it, and close
@@ -716,7 +729,7 @@ char** New_QV_Buffer (DAZZ_DB* db) @nogc;
 /// tag or characters are converted to a numeric or upper/lower case ascii
 /// string as per ascii.  Return with a zero, except when an error occurs and
 /// INTERACTIVE is defined in which case return wtih 1.
-int Load_QVentry (DAZZ_DB* db, int i, char** entry, int ascii) @nogc;
+int Load_QVentry (DAZZ_DB* db, int i, char** entry, SequenceFormat ascii) @nogc;
 
 
 /// Remove the QV pseudo track, all space associated with it, and close the
