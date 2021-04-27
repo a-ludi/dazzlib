@@ -411,6 +411,320 @@ struct LocalAlignment
 }
 
 
+class AlignmentSpec
+{
+    private Align_Spec* alignSpec;
+    private alias alignSpec this;
+    private float[4] _baseFrequency;
+
+    /**
+        Construct a new alignment specification.
+
+        Params:
+            averageCorrelation =
+                The average correlation (1 - 2*error_rate) for the sought
+                alignments. For Pacbio data we set this to .70 assuming an
+                average of 15% error in each read.
+            tracePointSpacing =
+                The spacing interval for keeping trace points and segment
+                differences.
+            baseFrequency =
+                A 4-element vector where afreq[0] = frequency of A, f(A),
+                freq[1] = f(C), freq[2] = f(G), and freq[3] = f(T). This
+                vector is part of the header of every DAZZ database.
+            reach =
+                If set extend the alignment to the boundary when reasonable,
+                otherwise the terminate only at suffix-positive points.
+    */
+    this(
+        double averageCorrelation,
+        trace_point_t tracePointSpacing,
+        float[4] baseFrequency,
+        Flag!"reach" reach,
+    )
+    in (0.5 <= averageCorrelation && averageCorrelation <= 1.0, "averageCorrelation must be within [0.5, 1.0]")
+    in (0 < tracePointSpacing, "tracePointSpacing must be positive")
+    in (baseFrequency[].all!"0.0 <= a && a <= 1.0", "base frequencies must be within [0, 1]")
+    in (absdiff(baseFrequency[].sum, 1.0) < 1e-6, "base frequencies sum up to 1")
+    {
+        this._baseFrequency = baseFrequency;
+        this.alignSpec = New_Align_Spec(
+            averageCorrelation,
+            tracePointSpacing.boundedConvert!int,
+            this._baseFrequency.ptr,
+            cast(bool) reach,
+        );
+    }
+
+
+    ~this()
+    {
+        if (alignSpec !is null)
+            Free_Align_Spec(alignSpec);
+    }
+
+
+    @property double averageCorrelation() const nothrow @trusted @nogc
+    {
+        if (alignSpec is null)
+            return typeof(return).init;
+
+        return Average_Correlation(alignSpec);
+    }
+
+
+    @property trace_point_t tracePointSpacing() const nothrow @trusted @nogc
+    {
+        if (alignSpec is null)
+            return typeof(return).init;
+
+        return Trace_Spacing(alignSpec).boundedConvert!trace_point_t;
+    }
+
+
+    @property float[4] baseFrequency() const nothrow @trusted @nogc
+    {
+        return _baseFrequency;
+    }
+
+
+    @property Flag!"reach" reach() const nothrow @trusted @nogc
+    {
+        if (alignSpec is null)
+            return typeof(return).init;
+
+        return cast(typeof(return)) Overlap_If_Possible(alignSpec);
+    }
+}
+
+
+/// Many routines like computeLocalAlignment need working storage that is more
+/// efficiently reused with each call, rather than being allocated anew with
+/// each call. Each *thread* can create a AlignmentWorkData object and this
+/// object holds and retains the working storage for routines of this module
+/// between calls to the routines.
+class AlignmentWorkData
+{
+    private Work_Data* workData;
+    private alias workData this;
+
+    /// Construct opaque work data for alignment operations.
+    this()
+    {
+        this.workData = New_Work_Data();
+    }
+
+
+    ~this()
+    {
+        if (workData !is null)
+            Free_Work_Data(workData);
+    }
+}
+
+
+///
+LocalAlignment[2] computeLocalAlignment(
+    const(char)[] aSequence,
+    const(char)[] bSequence,
+    coord_t antiBase,
+    arithmetic_t antiLow,
+    arithmetic_t antiHigh,
+    AlignmentSpec alignmentSpecification,
+)
+{
+    return computeLocalAlignment(
+        aSequence,
+        bSequence,
+        antiBase,
+        antiLow,
+        antiHigh,
+        alignmentSpecification,
+        new AlignmentWorkData(),
+    );
+}
+
+/// ditto
+LocalAlignment[2] computeLocalAlignment(
+    const(char)[] aSequence,
+    const(char)[] bSequence,
+    coord_t antiBase,
+    arithmetic_t antiLow,
+    arithmetic_t antiHigh,
+    AlignmentSpec alignmentSpecification,
+    AlignmentWorkData workData,
+)
+in (aSequence.length > 0 && aSequence[0].among(0, 1, 2, 3), "aSequence format must be numeric")
+in (*(aSequence.ptr - 1) == 4 && *(aSequence.ptr + aSequence.length) == 4, "aSequence must be terminated")
+in (bSequence.length > 0 && bSequence[0].among(0, 1, 2, 3), "bSequence format must be numeric")
+in (*(bSequence.ptr - 1) == 4 && *(bSequence.ptr + bSequence.length) == 4, "bSequence must be terminated")
+out (las; las[0].flags.disabled == las[1].flags.disabled)
+out (las; las[0].contigA == las[1].contigB && las[0].contigB == las[1].contigA)
+{
+    // TODO handle complement correctly
+    Path aPath;
+    Alignment alignment;
+    alignment.path = &aPath;
+    alignment.aseq = cast(char*) aSequence.ptr;
+    alignment.alen = aSequence.length.boundedConvert!int;
+    alignment.bseq = cast(char*) bSequence.ptr;
+    alignment.blen = bSequence.length.boundedConvert!int;
+
+    auto bPath = *Local_Alignment(
+        &alignment,
+        workData,
+        alignmentSpecification,
+        antiLow,
+        antiHigh,
+        antiBase,
+        -1,
+        -1,
+    );
+
+    const shouldDisable = (ref const Path path) =>
+        path.tlen == 0 ||
+        (path.tlen == 2 && (cast(const(trace_point_t)*) path.trace)[0 .. 2] == [0, 0]) ||
+        (path.abpos == path.aepos && path.bbpos == path.bepos);
+    const makeLocalAlignment = (ref const Path path, bool forward) => LocalAlignment(
+        Locus(
+            Contig(0, (forward ? alignment.alen : alignment.blen).boundedConvert!coord_t),
+            path.abpos.boundedConvert!coord_t,
+            path.aepos.boundedConvert!coord_t,
+        ),
+        Locus(
+            Contig(0, (forward ? alignment.blen : alignment.alen).boundedConvert!coord_t),
+            path.bbpos.boundedConvert!coord_t,
+            path.bepos.boundedConvert!coord_t,
+        ),
+        LocalAlignmentFlags(alignment.flags) | (shouldDisable(path)
+            ? LocalAlignmentFlag.disabled
+            : LocalAlignmentFlag.init
+        ),
+        alignmentSpecification.tracePointSpacing,
+        path.tlen > 0
+            ? (cast(const(TracePoint)*) path.trace)[0 .. path.tlen / 2].dup
+            : [],
+    );
+
+    typeof(return) localAlignments = [
+        makeLocalAlignment(aPath, true),
+        makeLocalAlignment(bPath, false),
+    ];
+
+    return localAlignments;
+}
+
+unittest
+{
+    enum tracePointSpacing = 3;
+    char[] aSequence = [4, 0, 1, 2, 3, 2, 1, 0, 4];
+    char[] bSequence = [4, 0, 1, 2, 0, 2, 1, 0, 4];
+    auto localAlignments = computeLocalAlignment(
+        aSequence[1 .. $ - 1],
+        bSequence[1 .. $ - 1],
+        0,
+        0,
+        0,
+        new AlignmentSpec(0.9, tracePointSpacing, [0.25f, 0.25f, 0.25f, 0.25f], No.reach),
+    );
+
+    assert(localAlignments == [
+        LocalAlignment(
+            Locus(
+                Contig(0, 7),
+                0,
+                7,
+            ),
+            Locus(
+                Contig(0, 7),
+                0,
+                7,
+            ),
+            LocalAlignmentFlags(),
+            tracePointSpacing,
+            [
+                TracePoint(0, 3),
+                TracePoint(1, 3),
+                TracePoint(0, 1),
+            ]),
+        LocalAlignment(
+            Locus(
+                Contig(0, 7),
+                0,
+                7,
+            ),
+            Locus(
+                Contig(0, 7),
+                0,
+                7,
+            ),
+            LocalAlignmentFlags(),
+            tracePointSpacing,
+            [
+                TracePoint(0, 3),
+                TracePoint(1, 3),
+                TracePoint(0, 1),
+            ]
+        ),
+    ]);
+}
+
+unittest
+{
+    enum tracePointSpacing = 3;
+    char[] aSequence = [4, 0, 1, 2, 3, 2, 1, 0, 4];
+    char[] bSequence = [4, 0, 0, 1, 2, 3, 2, 1, 0, 4];
+    auto localAlignments = computeLocalAlignment(
+        aSequence[1 .. $ - 1],
+        bSequence[1 .. $ - 1],
+        2,
+        -2,
+        2,
+        new AlignmentSpec(0.9, tracePointSpacing, [0.25f, 0.25f, 0.25f, 0.25f], No.reach),
+    );
+
+    assert(localAlignments == [
+        LocalAlignment(
+            Locus(
+                Contig(0, 7),
+                0,
+                7,
+            ),
+            Locus(
+                Contig(0, 8),
+                1,
+                8,
+            ),
+            LocalAlignmentFlags(),
+            tracePointSpacing,
+            [
+                TracePoint(0, 3),
+                TracePoint(0, 3),
+                TracePoint(0, 1),
+            ]),
+        LocalAlignment(
+            Locus(
+                Contig(0, 8),
+                1,
+                8,
+            ),
+            Locus(
+                Contig(0, 7),
+                0,
+                7,
+            ),
+            LocalAlignmentFlags(),
+            tracePointSpacing,
+            [
+                TracePoint(0, 2),
+                TracePoint(0, 3),
+                TracePoint(0, 2),
+            ]
+        ),
+    ]);
+}
+
+
 /// Returns true if 16bits are required for encoding the trace at
 /// tracePointSpacing.
 bool isLargeTraceType(Int)(const Int tracePointSpacing) pure nothrow @safe if (isIntegral!Int)
@@ -1130,8 +1444,8 @@ private void writeOverlap(
             las.rawWrite(
                 tracePoints
                     .map!(tp => [
-                        tp.numDiffs.to!small_trace_point_t,
-                        tp.numBasePairs.to!small_trace_point_t,
+                        tp.numDiffs.boundedConvert!small_trace_point_t,
+                        tp.numBasePairs.boundedConvert!small_trace_point_t,
                     ])
                     .joiner
                     .takeExactly(2*tracePoints.length)
