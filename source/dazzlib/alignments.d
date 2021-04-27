@@ -322,14 +322,7 @@ struct LocalAlignment
         mixin(compare!"contigB.end");
         mixin(compare!"numDiffs");
 
-        return () @trusted {
-            if (&this < &other)
-                return -1;
-            else if (&this > &other)
-                return 1;
-            else
-                return 0;
-        }();
+        return 0;
     }
 
 
