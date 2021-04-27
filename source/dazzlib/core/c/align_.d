@@ -113,8 +113,9 @@ struct Path
     int bepos;
 }
 
-enum LocalAlignmentFlag : int
+enum LocalAlignmentFlag : uint32
 {
+    init = 0x0,
     /// B-sequence is complemented
     complement = 0x1,
     /// A-sequence is complemented, not B !  Only Local_Alignment notices
@@ -228,7 +229,7 @@ void Free_Work_Data (Work_Data* work) nothrow @nogc;
 
     Params:
 
-        ave_corr =  the average correlatio n(1 - 2*error_rate) for the sought
+        ave_corr =  the average correlation (1 - 2*error_rate) for the sought
                     alignments.  For Pacbio data we set this to .70 assuming
                     an average of 15% error in each read.
         trace_space = the spacing interval for keeping trace points and
@@ -255,22 +256,22 @@ void Free_Work_Data (Work_Data* work) nothrow @nogc;
 alias Align_Spec = void;
 
 /// ditto
-Align_Spec* New_Align_Spec (double ave_corr, int trace_space, float* freq, int reach) nothrow @nogc;
+Align_Spec* New_Align_Spec (double ave_corr, int trace_space, float* freq, bool reach) nothrow @nogc;
 
 /// ditto
 void Free_Align_Spec (Align_Spec* spec) nothrow @nogc;
 
 /// ditto
-int Trace_Spacing (Align_Spec* spec) nothrow @nogc;
+int Trace_Spacing (const Align_Spec* spec) nothrow @nogc;
 
 /// ditto
-double Average_Correlation (Align_Spec* spec) nothrow @nogc;
+double Average_Correlation (const Align_Spec* spec) nothrow @nogc;
 
 /// ditto
-float* Base_Frequencies (Align_Spec* spec) nothrow @nogc;
+float* Base_Frequencies (const Align_Spec* spec) nothrow @nogc;
 
 /// ditto
-int Overlap_If_Possible (Align_Spec* spec) nothrow @nogc;
+bool Overlap_If_Possible (const Align_Spec* spec) nothrow @nogc;
 
 
 /**
@@ -413,7 +414,10 @@ int Compute_Alignment (Alignment* align_, Work_Data* work, ComputeAlignmentTask 
     relationhip between the two reads of 'align' to the given 'file' indented
     by 'indent' space.  Coord controls the display width of numbers, it must
     be not less than the width of any number to be displayed.
+*/
+void Alignment_Cartoon (FILE* file, Alignment* align_, int indent, int coord) nothrow @nogc;
 
+/**
     If the alignment trace is an exact trace, then one can ask Print_Alignment
     to print an ASCII representation of the alignment 'align' to the file
     'file'.  Indent the display by "indent" spaces and put "width" columns per
@@ -423,22 +427,8 @@ int Compute_Alignment (Alignment* align_, Work_Data* work, ComputeAlignmentTask 
     character in A and B in the given row is displayed with a field width
     given by coord's value.
 
-    Print_Reference is like Print_Alignment but rather than printing exaclty
-    "width" columns per segment, it prints "block" characters of the A
-    sequence in each segment.  This results in segments of different lengths,
-    but is convenient when looking at two alignments involving A as segments
-    are guaranteed to cover the same interval of A in a segment.
-
-    Both Print routines return 1 if an error occurred (not enough memory), and
-    0 otherwise.
-
-    Flip_Alignment modifies align so the roles of A and B are reversed.  If
-    full is off then the trace is ignored, otherwise the trace must be to a
-    full alignment trace and this trace is also appropriately inverted.
+    Return 1 if an error occurred (not enough memory), and 0 otherwise.
 */
-void Alignment_Cartoon (FILE* file, Alignment* align_, int indent, int coord) nothrow @nogc;
-
-/// ditto
 int Print_Alignment (
     FILE* file,
     Alignment* align_,
@@ -449,7 +439,15 @@ int Print_Alignment (
     int upper,
     int coord) nothrow @nogc;
 
-/// ditto
+/**
+    Print_Reference is like Print_Alignment but rather than printing exaclty
+    "width" columns per segment, it prints "block" characters of the A
+    sequence in each segment.  This results in segments of different lengths,
+    but is convenient when looking at two alignments involving A as segments
+    are guaranteed to cover the same interval of A in a segment.
+
+    Return 1 if an error occurred (not enough memory), and 0 otherwise.
+*/
 int Print_Reference (
     FILE* file,
     Alignment* align_,
@@ -460,8 +458,12 @@ int Print_Reference (
     int upper,
     int coord) nothrow @nogc;
 
-/// ditto
-void Flip_Alignment (Alignment* align_, int full) nothrow @nogc;
+/**
+    Flip_Alignment modifies align so the roles of A and B are reversed.  If
+    full is off then the trace is ignored, otherwise the trace must be to a
+    full alignment trace and this trace is also appropriately inverted.
+*/
+void Flip_Alignment (Alignment* align_, bool full) nothrow @nogc;
 
 /**
     Overlap abstraction.
@@ -520,7 +522,7 @@ void Print_Overlap (FILE* output, Overlap* ovl, int tbytes, int indent) nothrow 
 /// set in a call to Compress then it checks whether the values fit in 8-bits,
 /// and if not returns a non-zero result in interactive mode, or exits with an
 /// error message in batch mode.
-int Compress_TraceTo8 (Overlap* ovl, int check) nothrow @nogc;
+int Compress_TraceTo8 (Overlap* ovl, bool check) nothrow @nogc;
 
 /// ditto
 void Decompress_TraceTo16 (Overlap* ovl) nothrow @nogc;
