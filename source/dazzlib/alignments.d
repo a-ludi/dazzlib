@@ -558,6 +558,17 @@ in (aSequence.length > 0 && aSequence[0].among(0, 1, 2, 3), "aSequence format mu
 in (*(aSequence.ptr - 1) == 4 && *(aSequence.ptr + aSequence.length) == 4, "aSequence must be terminated")
 in (bSequence.length > 0 && bSequence[0].among(0, 1, 2, 3), "bSequence format must be numeric")
 in (*(bSequence.ptr - 1) == 4 && *(bSequence.ptr + bSequence.length) == 4, "bSequence must be terminated")
+in (antiLow <= antiHigh, "invalid anti-diagonal: antiLow > antiHigh")
+in (
+    0 <= (cast(arithmetic_t) antiBase + antiLow)/2 &&
+    (cast(arithmetic_t) antiBase + antiHigh)/2 <= aSequence.length,
+    "anti-diagonal is out of bounds of read A"
+)
+in (
+    0 <= (cast(arithmetic_t) antiBase - antiHigh)/2 &&
+    (cast(arithmetic_t) antiBase - antiLow)/2 <= bSequence.length,
+    "anti-diagonal is out of bounds of read B"
+)
 out (las; las[0].flags.disabled == las[1].flags.disabled)
 out (las; las[0].contigA == las[1].contigB && las[0].contigB == las[1].contigA)
 {
