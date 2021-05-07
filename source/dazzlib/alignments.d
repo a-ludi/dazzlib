@@ -530,7 +530,7 @@ LocalAlignment[2] computeLocalAlignment(
     coord_t antiBase,
     arithmetic_t antiLow,
     arithmetic_t antiHigh,
-    AlignmentSpec alignmentSpecification,
+    const AlignmentSpec alignmentSpecification,
 )
 {
     return computeLocalAlignment(
@@ -551,7 +551,7 @@ LocalAlignment[2] computeLocalAlignment(
     coord_t antiBase,
     arithmetic_t antiLow,
     arithmetic_t antiHigh,
-    AlignmentSpec alignmentSpecification,
+    const AlignmentSpec alignmentSpecification,
     AlignmentWorkData workData,
 )
 in (aSequence.length > 0 && aSequence[0].among(0, 1, 2, 3), "aSequence format must be numeric")

@@ -307,7 +307,7 @@ bool Overlap_If_Possible (const Align_Spec* spec) nothrow @nogc;
 Path* Local_Alignment (
     Alignment* align_,
     Work_Data* work,
-    Align_Spec* spec,
+    const(Align_Spec)* spec,
     int low,
     int hgh,
     int anti,
@@ -318,7 +318,7 @@ Path* Local_Alignment (
 int Find_Extension (
     Alignment* align_,
     Work_Data* work,
-    Align_Spec* spec,
+    const(Align_Spec)* spec,
     int diag,
     int anti,
     int lbord,
