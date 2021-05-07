@@ -1,5 +1,5 @@
 srcdir=DALIGNER
-builddir=.build
+builddir=.build/$(BUILD_TYPE)
 libdir=$(builddir)/lib
 objdir=$(builddir)/objdir
 
@@ -47,4 +47,4 @@ $(libdir) $(objdir) $(builddir):
 
 .phony: clean
 clean:
-	rm -f $(builddir)
+	rm -rf $(builddir)

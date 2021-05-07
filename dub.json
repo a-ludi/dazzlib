@@ -14,6 +14,6 @@
         "DALIGNER"
     ],
     "lflags": [
-        "-L$PACKAGE_DIR/external/.build/lib"
+        "-L$PACKAGE_DIR/external/.build/$BUILD_TYPE/lib"
     ]
 }
