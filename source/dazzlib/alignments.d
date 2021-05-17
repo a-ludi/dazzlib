@@ -581,7 +581,7 @@ out (las; las[0].contigA == las[1].contigB && las[0].contigB == las[1].contigA)
     alignment.bseq = cast(char*) bSequence.ptr;
     alignment.blen = bSequence.length.boundedConvert!int;
 
-    auto bPath = *Local_Alignment(
+    auto bPathPtr = Local_Alignment(
         &alignment,
         workData,
         alignmentSpecification,
@@ -591,6 +591,8 @@ out (las; las[0].contigA == las[1].contigB && las[0].contigB == las[1].contigA)
         -1,
         -1,
     );
+    dazzlibEnforce(bPathPtr !is null, currentError.idup);
+    auto bPath = *bPathPtr;
 
     const shouldDisable = (ref const Path path) =>
         path.tlen == 0 ||
