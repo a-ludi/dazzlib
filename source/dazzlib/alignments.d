@@ -594,18 +594,23 @@ out (las; las[0].contigA == las[1].contigB && las[0].contigB == las[1].contigA)
     dazzlibEnforce(bPathPtr !is null, currentError.idup);
     auto bPath = *bPathPtr;
 
+    enum Direction { forward, backward }
     const shouldDisable = (ref const Path path) =>
         path.tlen == 0 ||
         (path.tlen == 2 && (cast(const(trace_point_t)*) path.trace)[0 .. 2] == [0, 0]) ||
         (path.abpos == path.aepos && path.bbpos == path.bepos);
-    const makeLocalAlignment = (ref const Path path, bool forward) => LocalAlignment(
+    const makeLocalAlignment = (ref const Path path, Direction direction) => LocalAlignment(
         Locus(
-            Contig(0, (forward ? alignment.alen : alignment.blen).boundedConvert!coord_t),
+            Contig(0, (direction == Direction.forward
+                ? alignment.alen
+                : alignment.blen).boundedConvert!coord_t),
             path.abpos.boundedConvert!coord_t,
             path.aepos.boundedConvert!coord_t,
         ),
         Locus(
-            Contig(0, (forward ? alignment.blen : alignment.alen).boundedConvert!coord_t),
+            Contig(0, (direction == Direction.forward
+                ? alignment.blen
+                : alignment.alen).boundedConvert!coord_t),
             path.bbpos.boundedConvert!coord_t,
             path.bepos.boundedConvert!coord_t,
         ),
@@ -620,8 +625,8 @@ out (las; las[0].contigA == las[1].contigB && las[0].contigB == las[1].contigA)
     );
 
     typeof(return) localAlignments = [
-        makeLocalAlignment(aPath, true),
-        makeLocalAlignment(bPath, false),
+        makeLocalAlignment(aPath, Direction.forward),
+        makeLocalAlignment(bPath, Direction.backward),
     ];
 
     return localAlignments;
