@@ -957,6 +957,8 @@ class LocalAlignmentReader
 
 protected:
 
+    enum headerSize = long.sizeof + int.sizeof;
+
     void readHeader()
     {
         readNumLocalAlignments();
@@ -1193,6 +1195,266 @@ unittest
     );
 
     assert(equal(testLocalAlignments, recoveredLocalAlignments));
+}
+
+
+/// Enhaces `LocalAlignmentReader` by `popFrontExactly` and `reset(size_t)`.
+class IndexedLocalAlignmentReader
+{
+    LocalAlignmentReader reader;
+    alias reader this;
+    const(LasIndex) index;
+
+
+    this(
+        const string lasFile,
+        const LasIndex index,
+        BufferMode bufferMode,
+        TracePoint[] tracePointBuffer = [],
+    )
+    {
+        this(
+            lasFile,
+            index,
+            cast(string) null,
+            cast(string) null,
+            bufferMode,
+            tracePointBuffer
+        );
+    }
+
+
+    this(
+        const string lasFile,
+        const LasIndex index,
+        string dbA,
+        string dbB,
+        BufferMode bufferMode,
+        TracePoint[] tracePointBuffer = [],
+    )
+    {
+        this.reader = new LocalAlignmentReader(lasFile, dbA, dbB, bufferMode, tracePointBuffer);
+        this.index = index;
+        assert(index.localAlignmentIndex.length - 1 == this.reader.numLocalAlignments);
+    }
+
+
+    /// Reset the reader to the i'th (0-based) local alignment.
+    void reset(size_t i)
+    {
+        assert(i <= numLocalAlignments, "index out of bounds");
+
+        reader.las.seek(index.localAlignmentIndex[i]);
+        tracePointBuffer = fullTracePointBuffer;
+        numLocalAlignmentsLeft = numLocalAlignments - cast(id_t) i;
+        readLocalAlignment();
+    }
+
+
+    /// Advance the range by numSkip elements without reading them.
+    void popFrontExactly(size_t numSkip)
+    {
+        assert(numSkip <= numLocalAlignmentsLeft, "not enough elements left to pop");
+
+        const currentIndex = numLocalAlignments - numLocalAlignmentsLeft;
+        assert(
+            index.localAlignmentIndex[currentIndex + 1] == las.tell(),
+            "index does not match LAS file",
+        );
+
+        reader.las.seek(index.localAlignmentIndex[currentIndex + numSkip]);
+        numLocalAlignmentsLeft -= numSkip;
+        readLocalAlignment();
+    }
+
+    alias popFrontN = popFrontExactly;
+}
+
+static assert(isInputRange!IndexedLocalAlignmentReader);
+static assert(hasLength!IndexedLocalAlignmentReader);
+static assert(is(ElementType!IndexedLocalAlignmentReader == LocalAlignment));
+
+
+unittest
+{
+    import dazzlib.util.tempfile;
+    import dazzlib.util.testdata;
+    import std.file;
+    import std.algorithm;
+    import std.path;
+
+    auto tmpDir = mkdtemp("./.unittest-XXXXXX");
+    scope (exit)
+        rmdirRecurse(tmpDir);
+
+    auto lasFile = buildPath(tmpDir, "test.las");
+    auto computedLocalAlignments = testLocalAlignments
+        .map!((la) {
+            la.contigA.contig.length = 0;
+            la.contigB.contig.length = 0;
+
+            return la;
+        });
+
+    writeTestLas(lasFile);
+
+    auto recoveredLocalAlignments = new IndexedLocalAlignmentReader(
+        lasFile,
+        LasIndex.inferFrom(lasFile),
+        BufferMode.dynamic,
+    );
+
+    assert(equal(computedLocalAlignments, recoveredLocalAlignments));
+}
+
+unittest
+{
+    import dazzlib.util.tempfile;
+    import dazzlib.util.testdata;
+    import std.file;
+    import std.algorithm;
+    import std.path;
+
+    auto tmpDir = mkdtemp("./.unittest-XXXXXX");
+    scope (exit)
+        rmdirRecurse(tmpDir);
+
+    auto lasFile = buildPath(tmpDir, "test.las");
+    auto dbFile = buildPath(tmpDir, "test.db");
+
+    writeTestDb(dbFile);
+    writeTestLas(lasFile);
+
+    auto recoveredLocalAlignments = new IndexedLocalAlignmentReader(
+        lasFile,
+        LasIndex.inferFrom(lasFile),
+        dbFile,
+        dbFile,
+        BufferMode.dynamic,
+    );
+
+    assert(equal(testLocalAlignments, recoveredLocalAlignments));
+}
+
+unittest
+{
+    import dazzlib.util.tempfile;
+    import dazzlib.util.testdata;
+    import std.file;
+    import std.algorithm;
+    import std.path;
+
+    auto tmpDir = mkdtemp("./.unittest-XXXXXX");
+    scope (exit)
+        rmdirRecurse(tmpDir);
+
+    auto lasFile = buildPath(tmpDir, "test.las");
+    auto dbFile = buildPath(tmpDir, "test.db");
+
+    writeTestDb(dbFile);
+    writeTestLas(lasFile);
+
+    auto recoveredLocalAlignments = new IndexedLocalAlignmentReader(
+        lasFile,
+        LasIndex.inferFrom(lasFile),
+        dbFile,
+        dbFile,
+        BufferMode.dynamic,
+    );
+    recoveredLocalAlignments.popFrontExactly(2);
+
+    assert(equal(testLocalAlignments[2 .. $], recoveredLocalAlignments));
+
+    recoveredLocalAlignments.reset(2);
+
+    assert(equal(testLocalAlignments[2 .. $], recoveredLocalAlignments));
+}
+
+
+/// Speed up sparse accesses to LAS files.
+struct LasIndex
+{
+    private
+    {
+        size_t[] localAlignmentIndex;
+        size_t[] readIndex;
+    }
+
+
+    /// Construct index from LAS file by traversing it once.
+    static LasIndex inferFrom(in string lasFile)
+    {
+        auto lasReader = localAlignmentReader(lasFile);
+        auto lasIndex = LasIndex(uninitializedArray!(size_t[])(lasReader.numLocalAlignments + 1));
+
+        size_t readIdx;
+        id_t lastReadId;
+        lasReader.reset();
+        lasIndex.localAlignmentIndex[0] = LocalAlignmentReader.headerSize;
+        foreach (i, localAlignment; lasReader.enumerate)
+        {
+            const filePos = lasReader.las.tell();
+            lasIndex.localAlignmentIndex[i + 1] = filePos;
+
+            if (localAlignment.contigA.contig.id != lastReadId)
+            {
+                lasIndex.storeReadIndex(readIdx++, i);
+                lastReadId = localAlignment.contigA.contig.id;
+            }
+        }
+        lasIndex.storeReadIndex(readIdx++, lasReader.numLocalAlignments);
+        lasIndex.readIndex = lasIndex.readIndex[0 .. readIdx];
+
+        return lasIndex;
+    }
+
+
+    private void storeReadIndex(size_t i, size_t value) pure nothrow @safe
+    {
+        if (readIndex.length == 0)
+            readIndex = uninitializedArray!(size_t[])(10_000);
+
+        while (i >= readIndex.length)
+            readIndex.length += readIndex.length/3;
+
+        readIndex[i] = value;
+    }
+
+
+    /// Get the index slice for the i'th (0-based) group of local alignments
+    /// grouped by A-read.
+    size_t[2] areadSlice(size_t i) const pure nothrow @safe @nogc
+    {
+        assert(i + 1 < readIndex.length);
+        typeof(return) slice;
+        slice[] = readIndex[i .. i + 2];
+
+        return slice;
+    }
+}
+
+unittest
+{
+    import dazzlib.util.tempfile;
+    import dazzlib.util.testdata;
+    import std.file;
+    import std.algorithm;
+    import std.path;
+
+    auto tmpDir = mkdtemp("./.unittest-XXXXXX");
+    scope (exit)
+        rmdirRecurse(tmpDir);
+
+    auto lasFile = buildPath(tmpDir, "test.las");
+
+    writeTestLas(lasFile);
+
+    auto lasIndex = LasIndex.inferFrom(lasFile);
+
+    assert(lasIndex.localAlignmentIndex == [12, 54, 96, 138, 180]);
+    assert(lasIndex.readIndex == [0, 2, 4]);
+    assert(lasIndex.areadSlice(0) == [0, 2]);
+    assert(lasIndex.areadSlice(1) == [2, 4]);
 }
 
 
