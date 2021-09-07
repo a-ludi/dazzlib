@@ -58,6 +58,10 @@ struct Locus
     coord_t end;
 
 
+    invariant (isValidInterval());
+    invariant (isIntervalInBounds());
+
+
     @property coord_t length() const pure nothrow @safe @nogc
     {
         return end - begin;
@@ -92,6 +96,31 @@ struct Locus
     {
         return beginsWithin(allowance) && endsWithin(allowance);
     }
+
+
+    private bool _isValid() const pure nothrow @safe @nogc
+    {
+        return isValidInterval() && isIntervalInBounds;
+    }
+
+
+    private bool isValidInterval() const pure nothrow @safe @nogc
+    {
+        return begin <= end;
+    }
+
+
+    private bool isIntervalInBounds() const pure nothrow @safe @nogc
+    {
+        return contig.length == 0 || end <= contig.length;
+    }
+}
+
+
+/// Validates the locus without triggering the invariant.
+bool isValid(const Locus self) pure nothrow @safe @nogc
+{
+    return self._isValid();
 }
 
 
