@@ -12,6 +12,7 @@ import dazzlib.basictypes;
 import dazzlib.core.c.DB;
 import dazzlib.util.exception;
 import dazzlib.util.math;
+import dazzlib.util.memory;
 import dazzlib.util.safeio;
 import std.algorithm;
 import std.ascii;
@@ -568,6 +569,222 @@ class DazzDb
     }
 
 
+    protected static auto writeTrackHead(File annoFile, int trackLength, int recordSize)
+    {
+        annoFile.rawWrite((&trackLength)[0 .. 1]);
+        annoFile.rawWrite((&recordSize)[0 .. 1]);
+    }
+
+
+    /// Returns true if the named track is present in the track list. Tracks
+    /// can be opened using `getTrack` or created using `addMaskTrack`.
+    bool hasTrack(string trackName) const pure nothrow @safe @nogc
+    {
+        return (trackName in _trackIndex) !is null;
+    }
+
+
+    /// Construct a `MaskTrack` from a range of `intervals`. Expects that no
+    /// track with the given name was opened earlier. However, a track with
+    /// the given name MAY exist in the file system.
+    MaskTrack addMaskTrack(R, E = ElementType!R)(string trackName, R intervals)
+    if (
+        isInputRange!R &&
+        hasLength!R &&
+        is(typeof(E.readId) : id_t) &&
+        is(typeof(E.begin) : coord_t) &&
+        is(typeof(E.end) : coord_t)
+    )
+    in (!hasTrack(trackName))
+    {
+        // construct the track
+        auto maskTrack = MaskTrack.fromIntervals(trackName, numReads, intervals);
+
+        // register track with DAZZ_DB object
+        if (dazzDb.tracks is null)
+        {
+            // register as first track
+            dazzDb.tracks = maskTrack.dazzTrack;
+        }
+        else
+        {
+            // search last track in track list
+            DAZZ_TRACK* lastTrack = dazzDb.tracks;
+            while (lastTrack.next !is null)
+            {
+                lastTrack = lastTrack.next;
+                assert(lastTrack !is dazzDb.tracks, "cycle in tracks list detected");
+            }
+            // register new track as successor in the list
+            lastTrack.next = maskTrack.dazzTrack;
+        }
+
+        // register track with this DazzDB
+        _trackIndex[trackName] = maskTrack;
+
+        return maskTrack;
+    }
+
+    unittest
+    {
+        import dazzlib.util.tempfile;
+        import dazzlib.util.testdata;
+        import std.algorithm;
+        import std.file;
+        import std.range;
+
+        auto tmpDir = mkdtemp("./.unittest-XXXXXX");
+        scope (exit)
+            rmdirRecurse(tmpDir);
+
+        auto dbFile = buildPath(tmpDir, "test.db");
+        enum maskName = "test-mask";
+
+        writeTestDb(dbFile);
+
+        auto dazzDb = new DazzDb(dbFile);
+        auto maskTrack = dazzDb.addMaskTrack(maskName, testMaskData
+            .enumerate(id_t(1))
+            .map!((readData) => readData
+                .value
+                .chunks(2)
+                .map!((interval) {
+                    auto begin = interval.front;
+                    interval.popFront();
+                    auto end = interval.front;
+
+                    return tuple!(
+                        "readId",
+                        "begin",
+                        "end",
+                    )(readData.index, begin, end);
+                }))
+            .joiner
+            .takeExactly(testMaskData.map!"a.length / 2".sum));
+
+        assert(cast(MaskTrack) dazzDb.getTrack!int(maskName) == maskTrack);
+        assert(maskTrack.name == maskName);
+        assert(maskTrack.recordSize == DazzTrack.SizeOf.longData);
+        assert(maskTrack.numReads == testMaskData.length);
+        assert(maskTrack.type == DazzTrack.Type.mask);
+        assert(maskTrack.isDataLoaded);
+        assert(maskTrack.dataSegments[] == testMaskData);
+    }
+
+
+    /// Write data of all opened tracks to the file system.
+    void writeAllTracks() const
+    {
+        foreach (trackName; _trackIndex.byKey())
+            writeTrack(trackName);
+    }
+
+
+    /// Write all track data to the file system.
+    void writeTrack(string trackName) const
+    in (hasTrack(trackName))
+    in (_trackIndex[trackName].type == DazzTrack.Type.annotation || _trackIndex[trackName].isDataLoaded)
+    {
+        const track = _trackIndex[trackName];
+
+        const numReads = isTrimmed ? numReadsTrimmed : numReadsUntrimmed;
+        assert(track.dazzTrack.nreads == numReads);
+
+        // write .anno file
+        {
+            const numAnnotations = track.type == DazzTrack.Type.annotation
+                ? numReads
+                : numReads + 1;
+            auto annoFile = File(files.trackAnnotationFile(trackName), "wb");
+            writeTrackHead(annoFile, numReads, track.rawSize);
+            annoFile.rawWrite(track.dazzTrack.anno[0 .. numAnnotations * track.recordSize]);
+        }
+
+        // write data file if applicable
+        if (
+            track.type != DazzTrack.Type.annotation &&
+            track.dazzTrack.data !is null &&
+            track.isDataLoaded
+        )
+        {
+            auto dataFile = File(files.trackDataFile(trackName), "wb");
+
+            switch (track.type)
+            {
+                case DazzTrack.Type.mask:
+                    dataFile.rawWrite((cast(MaskTrack) track).data);
+                    break;
+                case DazzTrack.Type.intData:
+                    dataFile.rawWrite((cast(DataDazzTrack!(int32, ubyte)) track).data);
+                    break;
+                case DazzTrack.Type.longData:
+                    dataFile.rawWrite((cast(DataDazzTrack!(int64, ubyte)) track).data);
+                    break;
+                default:
+                    assert(0, "unreachable");
+            }
+        }
+    }
+
+    unittest
+    {
+        import dazzlib.util.tempfile;
+        import dazzlib.util.testdata;
+        import std.algorithm;
+        import std.file;
+        import std.range;
+
+        auto tmpDir = mkdtemp("./.unittest-XXXXXX");
+        scope (exit)
+            rmdirRecurse(tmpDir);
+
+        auto dbFile = buildPath(tmpDir, "test.db");
+        enum maskName = "test-mask";
+
+        {
+            // create DB with new track
+            writeTestDb(dbFile);
+            auto dazzDb = new DazzDb(dbFile);
+            auto maskTrack = dazzDb.addMaskTrack(maskName, testMaskData
+                .enumerate(id_t(1))
+                .map!((readData) => readData
+                    .value
+                    .chunks(2)
+                    .map!((interval) {
+                        auto begin = interval.front;
+                        interval.popFront();
+                        auto end = interval.front;
+
+                        return tuple!(
+                            "readId",
+                            "begin",
+                            "end",
+                        )(readData.index, begin, end);
+                    }))
+                .joiner
+                .takeExactly(testMaskData.map!"a.length / 2".sum));
+            dazzDb.writeTrack(maskName);
+        }
+
+        auto dazzDb = new DazzDb(dbFile);
+        auto maskTrack = dazzDb.getTrack(maskName);
+
+        assert(maskTrack.name == maskName);
+        assert(!maskTrack.isDataLoaded);
+        assert(maskTrack.type == DazzTrack.Type.mask);
+        assert(maskTrack.maskTrack !is null);
+        assert(maskTrack.dataTrack!(int64, int32) !is null);
+        assert(maskTrack.maskTrack.dataSegments[] == testMaskData);
+        assert(equal!equal(
+            maskTrack.maskTrack.intervals(),
+            testMaskData.map!(readData => readData
+                .chunks(2)
+                .map!(dataPair => MaskTrack.Interval(dataPair[0], dataPair[1]))
+            ),
+        ));
+    }
+
+
     /// Validate track with trackName.
     void validateTrack(string trackName, TrackKind kind, TrackFor trackFor = TrackFor.trimmed) const
     {
@@ -916,6 +1133,10 @@ class DataDazzTrack(T, Data=byte) if (is(T == int32) || is(T == int64)) : DazzTr
     }
 
 
+    /// Size of a single data entry in bytes.
+    enum dataRecordSize = Data.sizeof;
+
+
     /// Load the all data into a single block of memory.
     void loadAllData()
     {
@@ -927,6 +1148,13 @@ class DataDazzTrack(T, Data=byte) if (is(T == int32) || is(T == int64)) : DazzTr
     protected inout(T)[] annotations() inout nothrow @nogc
     {
         return (cast(inout(T)*) dazzTrack.anno)[0 .. numReads + 1];
+    }
+
+
+    protected inout(Data)[] data() inout nothrow @nogc
+    in (isDataLoaded)
+    {
+        return (cast(inout(Data)*) dazzTrack.data)[0 .. annotations[numReads] / dataRecordSize];
     }
 
 
@@ -1173,6 +1401,88 @@ class MaskTrack : DataDazzTrack!(int64, int32)
 
                 return interval;
             });
+    }
+
+
+    /// Constructs a `MaskTrack` from a range of `intervals`.
+    private static MaskTrack fromIntervals(R, E = ElementType!R)(
+        string trackName,
+        id_t numReads,
+        R intervals,
+    )
+    if (
+        isInputRange!R &&
+        hasLength!R &&
+        is(typeof(E.readId) : id_t) &&
+        is(typeof(E.begin) : coord_t) &&
+        is(typeof(E.end) : coord_t)
+    )
+    {
+        auto dazzTrack = mallocObject!DAZZ_TRACK(
+            null,
+            trackName.stringzCopy(),
+            DazzTrack.SizeOf.longData,
+            numReads,
+        );
+
+        // allocate memory
+        auto annotations = malloc!int64(dazzTrack.nreads + 1);
+        dazzTrack.anno = cast(void*) annotations.ptr;
+
+        auto dataLengths = malloc!int(dazzTrack.nreads);
+        dazzTrack.alen = dataLengths.ptr;
+
+        auto data = malloc!int(2 * intervals.length);
+        dazzTrack.data = cast(void*) data.ptr;
+
+        // begin writing data
+        id_t readId;
+        int dataSegmentSize;
+        int64 dataPtr;
+
+        alias nextRead = {
+            // prepare closing dataPtr
+            dataPtr += dataSegmentSize;
+            // write closing dataPtr
+            annotations[readId] = dataPtr;
+            if (readId > 0)
+            {
+                // store length of data segment for current read
+                dataLengths[readId - 1] = dataSegmentSize;
+                // update length of longest data segment
+                if (dataSegmentSize > dazzTrack.dmax)
+                    dazzTrack.dmax = dataSegmentSize;
+            }
+            // reset size of data segment
+            dataSegmentSize = 0;
+            // advance to next read id
+            ++readId;
+        };
+
+        // copy data from range
+        foreach (interval; intervals)
+        {
+            // write an empty data intervals for absent reads
+            while (readId < interval.readId)
+                nextRead();
+
+            // write [begin, end) interval to data
+            assert(data.length >= 2);
+            data[0] = interval.begin;
+            data[1] = interval.end;
+            data = data[2 .. $];
+            // update length of data segment
+            dataSegmentSize += 2 * int32.sizeof;
+        }
+
+        // write data interval for last read and possibly absent reads
+        while (readId <= dazzTrack.nreads)
+            nextRead();
+
+        // mark track as loaded
+        dazzTrack.loaded = 1;
+
+        return new MaskTrack(dazzTrack, DazzTrack.SizeOf.mask);
     }
 }
 
