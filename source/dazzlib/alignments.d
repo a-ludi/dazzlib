@@ -58,37 +58,37 @@ struct Locus
     coord_t end;
 
 
-    @property coord_t length() const pure nothrow @safe
+    @property coord_t length() const pure nothrow @safe @nogc
     {
         return end - begin;
     }
 
 
-    @property void boundedBegin(coord_t begin) pure nothrow @safe
+    @property void boundedBegin(coord_t begin) pure nothrow @safe @nogc
     {
         this.begin = min(begin, contig.length);
     }
 
 
-    @property void boundedEnd(coord_t end) pure nothrow @safe
+    @property void boundedEnd(coord_t end) pure nothrow @safe @nogc
     {
         this.end = min(end, contig.length);
     }
 
 
-    bool beginsWithin(coord_t allowance) const pure nothrow @safe
+    bool beginsWithin(coord_t allowance) const pure nothrow @safe @nogc
     {
         return begin <= allowance;
     }
 
 
-    bool endsWithin(coord_t allowance) const pure nothrow @safe
+    bool endsWithin(coord_t allowance) const pure nothrow @safe @nogc
     {
         return end + allowance >= contig.length;
     }
 
 
-    bool isFullyContained(coord_t allowance) const pure nothrow @safe
+    bool isFullyContained(coord_t allowance) const pure nothrow @safe @nogc
     {
         return beginsWithin(allowance) && endsWithin(allowance);
     }
@@ -133,7 +133,7 @@ struct Trace
     TranslatedTracePoint translateTracePoint(string contig)(
         coord_t contigPos,
         RoundingMode roundingMode,
-    ) const pure if (contig.among("contigA", "contigB"))
+    ) const pure nothrow @safe @nogc if (contig.among("contigA", "contigB"))
     {
         assert(mixin(contig ~ `.begin <= contigPos && contigPos <= ` ~ contig ~ `.end`));
 
@@ -155,7 +155,7 @@ struct Trace
     auto tracePointsUpTo(string contig)(
         coord_t contigAPos,
         RoundingMode roundingMode,
-    ) const pure nothrow if (contig == "contigA")
+    ) const pure nothrow @safe @nogc if (contig == "contigA")
     {
         assert(contigA.begin <= contigAPos && contigAPos <= contigA.end);
 
@@ -745,14 +745,14 @@ unittest
 
 /// Returns true if 16bits are required for encoding the trace at
 /// tracePointSpacing.
-bool isLargeTraceType(Int)(const Int tracePointSpacing) pure nothrow @safe if (isIntegral!Int)
+bool isLargeTraceType(Int)(const Int tracePointSpacing) pure nothrow @safe @nogc if (isIntegral!Int)
 {
     return tracePointSpacing > TRACE_XOVR;
 }
 
 
 /// Returns number of bytes used to encode a trace with tracePointSpacing.
-uint tracePointBytes(Int)(const Int tracePointSpacing) pure nothrow @safe if (isIntegral!Int)
+uint tracePointBytes(Int)(const Int tracePointSpacing) pure nothrow @safe @nogc if (isIntegral!Int)
 {
     return isLargeTraceType(tracePointSpacing)?  trace_point_t.sizeof : small_trace_point_t.sizeof;
 }
@@ -903,28 +903,28 @@ class LocalAlignmentReader
 
 
     ///
-    @property id_t numLocalAlignments() const pure nothrow @safe
+    @property id_t numLocalAlignments() const pure nothrow @safe @nogc
     {
         return _numLocalAlignments;
     }
 
 
     ///
-    @property trace_point_t tracePointSpacing() const pure nothrow @safe
+    @property trace_point_t tracePointSpacing() const pure nothrow @safe @nogc
     {
         return _tracePointSpacing;
     }
 
 
     ///
-    @property bool empty() const pure nothrow @safe
+    @property bool empty() const pure nothrow @safe @nogc
     {
         return numLocalAlignmentsLeft == 0;
     }
 
 
     /// Number of local alignments left to read.
-    @property size_t length() const pure nothrow @safe
+    @property size_t length() const pure nothrow @safe @nogc
     {
         return numLocalAlignmentsLeft;
     }
