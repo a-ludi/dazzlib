@@ -752,6 +752,15 @@ class DazzTrack
     }
 
 
+    // Provide names for special values of the `DAZZ_TRACK.size` field.
+    private enum SizeOf : int
+    {
+        mask = 0,
+        intData = 4,
+        longData = 8,
+    }
+
+
     private DAZZ_TRACK* _dazzTrack;
     private int _rawSize;
 
@@ -789,6 +798,12 @@ class DazzTrack
         return dazzTrack.size.boundedConvert!(typeof(return));
     }
 
+    // Value the should be writte to the track header.
+    protected @property int rawSize() const pure nothrow @safe @nogc
+    {
+        return _rawSize;
+    }
+
     /// Number of reads in track
     @property id_t numReads() const pure nothrow @safe @nogc
     {
@@ -810,11 +825,11 @@ class DazzTrack
 
         if (dazzTrack.data is null)
             return Type.annotation;
-        else if (rawSize == 0)
+        else if (rawSize == SizeOf.mask)
             return Type.mask;
-        else if (rawSize == 4)
+        else if (rawSize == SizeOf.intData)
             return Type.intData;
-        else if (rawSize == 8)
+        else if (rawSize == SizeOf.longData)
             return Type.longData;
         else
             return Type.unsupported;
