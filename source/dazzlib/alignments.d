@@ -1430,10 +1430,21 @@ struct LasIndex
     }
 
 
-    /// Construct index from LAS file by traversing it once.
+    @property bool isInitialized() const pure nothrow @safe @nogc
+    {
+        return localAlignmentIndex.length > 0;
+    }
+
+
+    /// Construct index from LAS file or local alignments range by traversing it once.
     static LasIndex inferFrom(in string lasFile)
     {
-        auto lasReader = localAlignmentReader(lasFile);
+        return inferFrom(localAlignmentReader(lasFile));
+    }
+
+    /// ditto
+    static LasIndex inferFrom(LocalAlignmentReader lasReader)
+    {
         auto lasIndex = LasIndex(uninitializedArray!(size_t[])(lasReader.numLocalAlignments + 1));
 
         size_t readIdx;
@@ -1467,6 +1478,13 @@ struct LasIndex
             readIndex.length += readIndex.length/3;
 
         readIndex[i] = value;
+    }
+
+
+    ///
+    size_t numReads() const pure nothrow @safe @nogc
+    {
+        return readIndex.length - 1;
     }
 
 
