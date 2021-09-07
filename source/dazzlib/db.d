@@ -569,7 +569,7 @@ class DazzDb
 
 
     /// Validate track with trackName.
-    void validateTrack(string trackName, TrackKind kind, TrackFor trackFor = TrackFor.trimmed)
+    void validateTrack(string trackName, TrackKind kind, TrackFor trackFor = TrackFor.trimmed) const
     {
         string corrupted(string explanation, Args...)(Args args)
         {
