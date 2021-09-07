@@ -159,6 +159,22 @@ struct Trace
 
 
     ///
+    coord_t translateCoordLinear(string contig)(coord_t contigPos) const pure nothrow @safe @nogc
+        if (contig.among("contigA"))
+    {
+        const translatedTracePoint = translateTracePoint!contig(contigPos, RoundingMode.floor);
+
+        // cap the linear interpolation at the next trace point and at the
+        // end coordinate of the alignment
+        return min(
+            translatedTracePoint.contigB + (contigPos - translatedTracePoint.contigA),
+            translatedTracePoint.contigB + tracePointSpacing - 1,
+            contigB.end - 1,
+        );
+    }
+
+
+    ///
     TranslatedTracePoint translateTracePoint(string contig)(
         coord_t contigPos,
         RoundingMode roundingMode,
