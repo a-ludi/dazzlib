@@ -912,7 +912,7 @@ class DataDazzTrack(T, Data=byte) if (is(T == int32) || is(T == int64)) : DazzTr
         assert(type.among(Type.mask, Type.intData, Type.longData),
             "cannot derive " ~ typeof(this).stringof ~ ": type must be intData or longData",
         );
-        assert(recordSize == T.sizeof, "record size does not match the the size of " ~ T.stringof);
+        assert(recordSize == T.sizeof, "record size does not match the size of " ~ T.stringof);
     }
 
 
