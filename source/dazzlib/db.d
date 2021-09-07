@@ -1390,17 +1390,17 @@ class MaskTrack : DataDazzTrack!(int64, int32)
 
     /// Returns a lazy random-access range of `Interval`s for dataSegment.
     static auto toIntervals(const int[] dataSegment)
+    in (dataSegment.length % 2 == 0, "corrupted mask data")
     {
-        return dataSegment
-            .map!(boundedConvert!(coord_t, int))
-            .chunks(2)
-            .map!((chunk) {
-                assert(chunk.length == 2, "corrupted mask data");
-                auto interval = Interval(chunk[0], chunk[1]);
-                assert(&interval);
+        return iota(dataSegment.length / 2).map!((i) {
+            auto interval = Interval(
+                dataSegment[2*i].boundedConvert!coord_t,
+                dataSegment[2*i + 1].boundedConvert!coord_t,
+            );
+            assert(&interval);
 
-                return interval;
-            });
+            return interval;
+        });
     }
 
 
