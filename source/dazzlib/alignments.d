@@ -1560,13 +1560,115 @@ LocalAlignmentReader localAlignmentReader(
     TracePoint[] tracePointBuffer = [],
 )
 {
+    prepareBuffer(tracePointBuffer, bufferMode, AlignmentStats.inferFrom(lasFile));
+
+    return new LocalAlignmentReader(
+        lasFile,
+        dbA,
+        dbB,
+        bufferMode,
+        tracePointBuffer,
+    );
+}
+
+
+/// Construct a pseudo-random access range that lazily reads local alignments
+/// from lasFile. The range offers two additional operations `reset`, which
+/// resets the range to a specific position, and `popFrontExactly`, which
+/// skips a given number of records efficiently. If dbA and/or dbB are given,
+/// the contig lengths will be filled in. If no tracePointBuffer is given, it
+/// will be constructed  internally according to bufferMode.
+///
+/// See_also: IndexedLocalAlignmentReader, LasIndex
+IndexedLocalAlignmentReader indexedLocalAlignmentReader(
+    in string lasFile,
+    BufferMode bufferMode = BufferMode.skip,
+    TracePoint[] tracePointBuffer = [],
+)
+{
+    return indexedLocalAlignmentReader(lasFile, LasIndex.init, null, null, bufferMode, tracePointBuffer);
+}
+
+IndexedLocalAlignmentReader indexedLocalAlignmentReader(
+    in string lasFile,
+    LasIndex index,
+    BufferMode bufferMode = BufferMode.skip,
+    TracePoint[] tracePointBuffer = [],
+)
+{
+    return indexedLocalAlignmentReader(lasFile, index, null, null, bufferMode, tracePointBuffer);
+}
+
+/// ditto
+IndexedLocalAlignmentReader indexedLocalAlignmentReader(
+    in string lasFile,
+    in string dbA,
+    BufferMode bufferMode = BufferMode.skip,
+    TracePoint[] tracePointBuffer = [],
+)
+{
+    return indexedLocalAlignmentReader(lasFile, LasIndex.init, dbA, null, bufferMode, tracePointBuffer);
+}
+
+/// ditto
+IndexedLocalAlignmentReader indexedLocalAlignmentReader(
+    in string lasFile,
+    LasIndex index,
+    in string dbA,
+    BufferMode bufferMode = BufferMode.skip,
+    TracePoint[] tracePointBuffer = [],
+)
+{
+    return indexedLocalAlignmentReader(lasFile, index, dbA, null, bufferMode, tracePointBuffer);
+}
+
+/// ditto
+IndexedLocalAlignmentReader indexedLocalAlignmentReader(
+    in string lasFile,
+    in string dbA,
+    in string dbB,
+    BufferMode bufferMode = BufferMode.skip,
+    TracePoint[] tracePointBuffer = [],
+)
+{
+    return indexedLocalAlignmentReader(lasFile, LasIndex.init, dbA, dbB, bufferMode, tracePointBuffer);
+}
+
+/// ditto
+IndexedLocalAlignmentReader indexedLocalAlignmentReader(
+    in string lasFile,
+    LasIndex index,
+    in string dbA,
+    in string dbB,
+    BufferMode bufferMode = BufferMode.skip,
+    TracePoint[] tracePointBuffer = [],
+)
+{
+    prepareBuffer(tracePointBuffer, bufferMode, AlignmentStats.inferFrom(lasFile));
+    prepareIndex(index, lasFile);
+
+    return new IndexedLocalAlignmentReader(
+        lasFile,
+        index,
+        dbA,
+        dbB,
+        bufferMode,
+        tracePointBuffer,
+    );
+}
+
+
+private void prepareBuffer(
+    ref TracePoint[] tracePointBuffer,
+    BufferMode bufferMode,
+    lazy AlignmentStats alignmentStats,
+) pure @safe
+{
     if (
         bufferMode.among(BufferMode.overwrite, BufferMode.doubleBuffer, BufferMode.preallocated) &&
         tracePointBuffer.length == 0
     )
     {
-        auto alignmentStats = AlignmentStats.inferFrom(lasFile);
-
         if (bufferMode == BufferMode.overwrite)
             tracePointBuffer = uninitializedArray!(typeof(tracePointBuffer))(
                 alignmentStats.maxTracePoints,
@@ -1580,14 +1682,13 @@ LocalAlignmentReader localAlignmentReader(
                 alignmentStats.numTracePoints,
             );
     }
+}
 
-    return new LocalAlignmentReader(
-        lasFile,
-        dbA,
-        dbB,
-        bufferMode,
-        tracePointBuffer,
-    );
+
+private void prepareIndex(ref LasIndex index, string lasFile)
+{
+    if (!index.isInitialized)
+        index = LasIndex.inferFrom(lasFile);
 }
 
 
