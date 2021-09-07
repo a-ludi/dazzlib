@@ -1049,19 +1049,17 @@ protected:
             fillInContigLength!'A'();
         if (bLengths.length > 0)
             fillInContigLength!'B'();
-        auto traceLength = getTraceVectorLength();
 
         if (skipTracePoints)
-            skipTraceVector(traceLength);
+            skipTraceVector();
         else
-            readTraceVector(traceLength);
+            readTraceVector();
 
         if (!skipTracePoints)
         {
             if (!isLargeTraceType)
                 rewriteTracePointBufferToLargeTracePointType();
 
-            auto numTracePoints = overlapHead.path.tlen / 2;
             currentLA.tracePoints = tracePointBuffer[0 .. numTracePoints];
             if (bufferMode == BufferMode.preallocated)
                 tracePointBuffer = tracePointBuffer[numTracePoints .. $];
@@ -1076,6 +1074,11 @@ protected:
             Overlap.sizeof
         ];
         las.rawReadAll(overlapBytes, unexpectedEOF!"overlapHead");
+
+        dazzlibEnforce(
+            overlapHead.path.tlen % 2 == 0,
+            "illegal value for tlen: must be multiple of 2",
+        );
     }
 
 
@@ -1111,42 +1114,29 @@ protected:
     }
 
 
-    size_t getTraceVectorLength() const pure @safe
-    {
-        auto traceVectorLength = overlapHead.path.tlen * tracePointBytes(tracePointSpacing);
-        dazzlibEnforce(
-            traceVectorLength % 2 == 0,
-            "illegal value for tlen: must be multiple of 2",
-        );
-
-        return traceVectorLength;
-    }
-
-
-    void readTraceVector(size_t traceLength)
+    void readTraceVector()
     {
         if (bufferMode == BufferMode.dynamic)
-            tracePointBuffer = uninitializedArray!(TracePoint[])(overlapHead.path.tlen / 2);
-        auto rawBuffer = getRawTracePointBuffer(traceLength);
+            tracePointBuffer = uninitializedArray!(TracePoint[])(numTracePoints);
+        auto rawBuffer = getRawTracePointBuffer();
         las.rawReadAll(rawBuffer, unexpectedEOF!"tracePoints");
     }
 
 
-    void skipTraceVector(size_t traceLength)
+    void skipTraceVector()
     {
         import core.stdc.stdio : SEEK_CUR;
 
-        las.seek(traceLength, SEEK_CUR);
+        las.seek(traceVectorLength, SEEK_CUR);
     }
 
 
-    void rewriteTracePointBufferToLargeTracePointType()
+    void rewriteTracePointBufferToLargeTracePointType() pure nothrow
     {
-        auto traceVectorLength = overlapHead.path.tlen;
         // make sure enough memory is allocated
-        auto smallTraceVector = getRawTracePointBuffer(traceVectorLength);
+        auto smallTraceVector = getRawTracePointBuffer();
         // select appropriate portion of tracePointBuffer
-        auto largeTracePoints = tracePointBuffer.ptr[0 .. traceVectorLength / 2];
+        auto largeTracePoints = tracePointBuffer.ptr[0 .. numTracePoints];
         // convert numbers in reverse order as to avoid overwriting
         foreach_reverse (i, ref largeTracePoint; largeTracePoints)
         {
@@ -1158,15 +1148,29 @@ protected:
     }
 
 
-    @property ubyte[] getRawTracePointBuffer(size_t traceLength) pure nothrow
+    @property ubyte[] getRawTracePointBuffer() pure nothrow
     {
         // prepare bytes buffer
         auto bufferBytes = tracePointBuffer.length * TracePoint.sizeof;
         auto rawBuffer = (cast(ubyte*) tracePointBuffer.ptr)[0 .. bufferBytes];
         // reduce size (triggers bounds check)
-        rawBuffer = rawBuffer[0 .. traceLength];
+        rawBuffer = rawBuffer[0 .. traceVectorLength];
 
         return rawBuffer;
+    }
+
+
+    @property size_t traceVectorLength() const pure nothrow @safe @nogc
+    {
+        return overlapHead.path.tlen * tracePointBytes(tracePointSpacing);
+    }
+
+
+    @property size_t numTracePoints() const pure nothrow @safe @nogc
+    {
+        assert(overlapHead.path.tlen % 2 == 0, "illegal value for tlen: must be multiple of 2");
+
+        return overlapHead.path.tlen /2 ;
     }
 
 
