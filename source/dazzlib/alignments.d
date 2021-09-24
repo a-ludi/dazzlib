@@ -1785,26 +1785,115 @@ unittest
 }
 
 
-void writeAlignments(R)(const string lasFile, R localAlignments)
-    if (isInputRange!R && is(const(ElementType!R) == const(LocalAlignment)))
+/**
+    Write local alignments piece-by-piece.
+*/
+class LocalAlignmentWriter
 {
-    auto las = File(lasFile, "wb");
+    File las;
+    long numLocalAlignments;
+    int tracePointSpacing;
 
-    long numLocalAlignments = 0; // will be overwritten at the end
-    auto tracePointSpacing = cast(int) AlignmentStats.inferTracePointSpacingFrom(localAlignments);
-    las.rawWrite([numLocalAlignments]);
-    las.rawWrite([tracePointSpacing]);
 
-    foreach (localAlignment; localAlignments)
+    this(string lasFile, trace_point_t tracePointSpacing)
+    {
+        this(File(lasFile, "wb"), tracePointSpacing);
+    }
+
+
+    private this(File las, trace_point_t tracePointSpacing)
+    {
+        this.las = las;
+        this.tracePointSpacing = tracePointSpacing;
+        writeHeader();
+    }
+
+
+    ~this()
+    {
+        if (isOpen)
+            close();
+    }
+
+
+    private void writeHeader()
+    {
+        las.rawWrite((&numLocalAlignments)[0 .. 1]);
+        las.rawWrite((&tracePointSpacing)[0 .. 1]);
+    }
+
+
+    /// Write `localAlignment` to the LAS file.
+    void opOpAssign(string op)(const LocalAlignment localAlignment) if (op == "~")
+    in (localAlignment.tracePointSpacing > 0, "localAlignment.tracePointSpacing is required")
+    in (localAlignment.tracePointSpacing == tracePointSpacing, "trace point spacings disagree")
+    in (isOpen, "writer was already closed")
     {
         las.writeLocalAlignment(localAlignment, tracePointSpacing);
         ++numLocalAlignments;
     }
 
-    las.rewind();
-    las.rawWrite([numLocalAlignments]);
+    /// ditto
+    alias put = opOpAssign!"~";
 
-    las.close();
+
+    /// Returns true if this writer can still be written to.
+    bool isOpen() const pure nothrow @safe
+    {
+        return las.isOpen;
+    }
+
+
+    /// Finish the LAS file and close it.
+    void close()
+    in (isOpen, "writer was already closed")
+    {
+        las.rewind();
+        writeHeader();
+        las.close();
+    }
+}
+
+unittest
+{
+    import dazzlib.util.tempfile;
+    import dazzlib.util.testdata;
+    import std.algorithm;
+    import std.file;
+    import std.path;
+
+    enum tracePointSpacing = 100;
+    enum dummyLocalAlignment = LocalAlignment(Locus(), Locus(), LocalAlignmentFlags.init,
+                                              tracePointSpacing);
+    auto tmpLas = mkstemp("./.unittest-XXXXXX", ".las").name;
+    scope (exit)
+        remove(tmpLas);
+
+    auto writer = new LocalAlignmentWriter(tmpLas, tracePointSpacing);
+
+    // operator interface
+    writer ~= dummyLocalAlignment;
+    // put range primitive
+    writer.put(dummyLocalAlignment);
+    // writing a range
+    dummyLocalAlignment.repeat(10).copy(writer);
+
+    // finishes the LAS file; this gets called implicitly upon destruction
+    // if the writer still `isOpen`.
+    writer.close();
+}
+
+
+void writeAlignments(R)(const string lasFile, R localAlignments)
+    if (isInputRange!R && is(const(ElementType!R) == const(LocalAlignment)))
+{
+    scope writer = new LocalAlignmentWriter(
+        lasFile,
+        AlignmentStats.inferTracePointSpacingFrom(localAlignments),
+    );
+
+    localAlignments.copy(writer);
+    writer.close();
 }
 
 
