@@ -180,7 +180,8 @@ struct Trace
         RoundingMode roundingMode,
     ) const pure nothrow @safe @nogc if (contig.among("contigA", "contigB"))
     {
-        assert(mixin(contig ~ `.begin <= contigPos && contigPos <= ` ~ contig ~ `.end`));
+        const locus = mixin(contig);
+        assert(locus.begin <= contigPos && contigPos <= locus.end);
 
         auto tracePointIndex = tracePointsUpTo!contig(contigPos, roundingMode);
         auto contigBPos = contigB.begin + tracePoints[0 .. tracePointIndex]
