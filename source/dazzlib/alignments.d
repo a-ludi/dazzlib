@@ -98,6 +98,12 @@ struct Locus
     }
 
 
+    bool overlaps(const Locus other) const pure nothrow @safe @nogc
+    {
+        return this.begin < other.end && other.begin < this.end;
+    }
+
+
     private bool _isValid() const pure nothrow @safe @nogc
     {
         return isValidInterval() && isIntervalInBounds;
