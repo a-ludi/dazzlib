@@ -105,6 +105,12 @@ struct Locus
     }
 
 
+    bool covers(coord_t pos) const pure nothrow @safe @nogc
+    {
+        return this.begin <= pos && pos < this.end;
+    }
+
+
     private bool _isValid() const pure nothrow @safe @nogc
     {
         return isValidInterval() && isIntervalInBounds;
