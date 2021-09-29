@@ -19,6 +19,7 @@ import std.algorithm;
 import std.array;
 import std.ascii : toLower;
 import std.conv;
+import std.exception;
 import std.format;
 import std.range;
 import std.stdio;
@@ -1433,7 +1434,8 @@ struct LasIndex
     private
     {
         size_t[] localAlignmentIndex;
-        size_t[] readIndex;
+        size_t[] sliceIndex;
+        size_t[id_t] readIndex;
     }
 
 
@@ -1465,45 +1467,58 @@ struct LasIndex
 
             if (localAlignment.contigA.contig.id != lastReadId)
             {
-                lasIndex.storeReadIndex(readIdx++, i);
+                lasIndex.readIndex[localAlignment.contigA.contig.id] = readIdx;
+                lasIndex.storeSliceIndex(readIdx++, i);
                 lastReadId = localAlignment.contigA.contig.id;
             }
         }
-        lasIndex.storeReadIndex(readIdx++, lasReader.numLocalAlignments);
-        lasIndex.readIndex = lasIndex.readIndex[0 .. readIdx];
+        lasIndex.storeSliceIndex(readIdx++, lasReader.numLocalAlignments);
+        lasIndex.sliceIndex = lasIndex.sliceIndex[0 .. readIdx];
+        lasIndex.readIndex.rehash();
 
         return lasIndex;
     }
 
 
-    private void storeReadIndex(size_t i, size_t value) pure nothrow @safe
+    private void storeSliceIndex(size_t i, size_t value) pure nothrow @safe
     {
-        if (readIndex.length == 0)
-            readIndex = uninitializedArray!(size_t[])(10_000);
+        if (sliceIndex.length == 0)
+            sliceIndex = uninitializedArray!(size_t[])(10_000);
 
-        while (i >= readIndex.length)
-            readIndex.length += readIndex.length/3;
+        while (i >= sliceIndex.length)
+            sliceIndex.length += sliceIndex.length/3;
 
-        readIndex[i] = value;
+        sliceIndex[i] = value;
     }
 
 
     ///
     size_t numReads() const pure nothrow @safe @nogc
     {
-        return readIndex.length - 1;
+        return sliceIndex.length - 1;
     }
 
 
     /// Get the index slice for the i'th (0-based) group of local alignments
     /// grouped by A-read.
-    size_t[2] areadSlice(size_t i) const pure nothrow @safe @nogc
+    size_t[2] sliceAt(size_t i) const pure nothrow @safe @nogc
     {
-        assert(i + 1 < readIndex.length);
+        assert(i + 1 < sliceIndex.length);
         typeof(return) slice;
-        slice[] = readIndex[i .. i + 2];
+        slice[] = sliceIndex[i .. i + 2];
 
         return slice;
+    }
+
+
+    /// Get the index slice for readId.
+    size_t[2] areadSlice(id_t readId) const pure nothrow @safe
+    {
+        enum emptySlice = typeof(return).init;
+
+        const sliceIdx = assumeWontThrow(readIndex.get(readId, size_t.max));
+
+        return sliceIdx < sliceIndex.length ? sliceAt(sliceIdx) : emptySlice;
     }
 }
 
@@ -1527,8 +1542,10 @@ unittest
 
     assert(lasIndex.localAlignmentIndex == [12, 54, 96, 138, 180]);
     assert(lasIndex.readIndex == [0, 2, 4]);
-    assert(lasIndex.areadSlice(0) == [0, 2]);
-    assert(lasIndex.areadSlice(1) == [2, 4]);
+    assert(lasIndex.sliceAt(0) == [0, 2]);
+    assert(lasIndex.sliceAt(1) == [2, 4]);
+    assert(lasIndex.areadSlice(1) == lasIndex.sliceAt(0));
+    assert(lasIndex.areadSlice(19) == lasIndex.sliceAt(1));
 }
 
 
