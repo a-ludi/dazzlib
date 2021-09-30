@@ -174,16 +174,45 @@ struct Trace
     ///
     coord_t translateCoordLinear(string contig)(coord_t contigPos) const pure nothrow @safe @nogc
         if (contig.among("contigA"))
+        out (bpos; contigB.begin <= bpos && bpos <= contigB.end)
     {
-        const translatedTracePoint = translateTracePoint!contig(contigPos, RoundingMode.floor);
+        enum roundingMode = RoundingMode.floor;
+        const tracePointIndex = tracePointsUpTo!contig(contigPos, roundingMode);
+        const translatedTracePoint = translateTracePoint!contig(contigPos, roundingMode);
 
-        // cap the linear interpolation at the next trace point and at the
-        // end coordinate of the alignment
-        return min(
-            translatedTracePoint.contigB + (contigPos - translatedTracePoint.contigA),
-            translatedTracePoint.contigB + tracePointSpacing - 1,
-            contigB.end - 1,
+        if (tracePointIndex == tracePoints.length)
+        {
+            assert(translatedTracePoint.contigA == contigPos);
+
+            return translatedTracePoint.contigB;
+        }
+
+        const aBasePairs = cast(double) (contigPos - translatedTracePoint.contigA);
+        const bBasePairs = cast(double) tracePoints[tracePointIndex].numBasePairs;
+        const linearOffset = cast(coord_t) (
+            bBasePairs * (aBasePairs / cast(double) tracePointSpacing)
         );
+
+        // cap the linear interpolation at the end coordinate of the alignment
+        return translatedTracePoint.contigB + linearOffset;
+    }
+
+
+    unittest
+    {
+        const trace = Trace(
+            Locus(Contig(0, 400), 0, 400),
+            Locus(Contig(0, 350), 0, 350),
+            100,
+            [
+                TracePoint(0, 100),
+                TracePoint(0, 100),
+                TracePoint(50, 50),
+                TracePoint(0, 100),
+            ]
+        );
+
+        assert(trace.translateCoordLinear!"contigA"(250) == 225);
     }
 
 
@@ -192,11 +221,23 @@ struct Trace
         coord_t contigPos,
         RoundingMode roundingMode,
     ) const pure nothrow @safe @nogc if (contig.among("contigA", "contigB"))
+    in (mixin(contig).begin <= contigPos && contigPos <= mixin(contig).end)
+    {
+        const tracePointIndex = tracePointsUpTo!contig(contigPos, roundingMode);
+
+        return translateTracePoint!contig(contigPos, roundingMode, tracePointIndex);
+    }
+
+
+    private TranslatedTracePoint translateTracePoint(string contig)(
+        coord_t contigPos,
+        RoundingMode roundingMode,
+        size_t tracePointIndex,
+    ) const pure nothrow @safe @nogc if (contig.among("contigA", "contigB"))
     {
         const locus = mixin(contig);
         assert(locus.begin <= contigPos && contigPos <= locus.end);
 
-        auto tracePointIndex = tracePointsUpTo!contig(contigPos, roundingMode);
         auto contigBPos = contigB.begin + tracePoints[0 .. tracePointIndex]
                 .map!"a.numBasePairs"
                 .sum;
@@ -211,7 +252,7 @@ struct Trace
 
 
     ///
-    auto tracePointsUpTo(string contig)(
+    size_t tracePointsUpTo(string contig)(
         coord_t contigAPos,
         RoundingMode roundingMode,
     ) const pure nothrow @safe @nogc if (contig == "contigA")
@@ -268,7 +309,7 @@ struct Trace
     }
 
     /// ditto
-    auto tracePointsUpTo(string contig)(
+    size_t tracePointsUpTo(string contig)(
         coord_t contigBPos,
         RoundingMode roundingMode,
     ) const pure nothrow if (contig == "contigB")
@@ -329,7 +370,7 @@ struct LocalAlignment
 
 
     ///
-    @property Trace trace() const pure nothrow @safe
+    @property Trace trace() const pure nothrow @safe @nogc
     {
         return Trace(
             contigA,
@@ -1547,7 +1588,7 @@ unittest
     auto lasIndex = LasIndex.inferFrom(lasFile);
 
     assert(lasIndex.localAlignmentIndex == [12, 54, 96, 138, 180]);
-    assert(lasIndex.readIndex == [0, 2, 4]);
+    assert(lasIndex.sliceIndex == [0, 2, 4]);
     assert(lasIndex.sliceAt(0) == [0, 2]);
     assert(lasIndex.sliceAt(1) == [2, 4]);
     assert(lasIndex.areadSlice(1) == lasIndex.sliceAt(0));
