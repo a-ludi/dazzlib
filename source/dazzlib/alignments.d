@@ -1307,12 +1307,12 @@ class IndexedLocalAlignmentReader
 {
     LocalAlignmentReader reader;
     alias reader this;
-    const(LasIndex) index;
+    const(AlignmentStats) index;
 
 
     this(
         const string lasFile,
-        const LasIndex index,
+        const AlignmentStats index,
         BufferMode bufferMode,
         TracePoint[] tracePointBuffer = [],
     )
@@ -1330,7 +1330,7 @@ class IndexedLocalAlignmentReader
 
     this(
         const string lasFile,
-        const LasIndex index,
+        const AlignmentStats index,
         string dbA,
         string dbB,
         BufferMode bufferMode,
@@ -1339,7 +1339,7 @@ class IndexedLocalAlignmentReader
     {
         this.reader = new LocalAlignmentReader(lasFile, dbA, dbB, bufferMode, tracePointBuffer);
         this.index = index;
-        assert(index.localAlignmentIndex.length - 1 == this.reader.numLocalAlignments);
+        assert(index.lasIndex.length - 1 == this.reader.numLocalAlignments);
     }
 
 
@@ -1348,7 +1348,7 @@ class IndexedLocalAlignmentReader
     {
         assert(i <= numLocalAlignments, "index out of bounds");
 
-        reader.las.seek(index.localAlignmentIndex[i]);
+        reader.las.seek(index.lasIndex[i]);
         tracePointBuffer = fullTracePointBuffer;
         numLocalAlignmentsLeft = numLocalAlignments - cast(id_t) i;
         readLocalAlignment();
@@ -1362,11 +1362,11 @@ class IndexedLocalAlignmentReader
 
         const currentIndex = numLocalAlignments - numLocalAlignmentsLeft;
         assert(
-            index.localAlignmentIndex[currentIndex + 1] == las.tell(),
+            index.lasIndex[currentIndex + 1] == las.tell(),
             "index does not match LAS file",
         );
 
-        reader.las.seek(index.localAlignmentIndex[currentIndex + numSkip]);
+        reader.las.seek(index.lasIndex[currentIndex + numSkip]);
         numLocalAlignmentsLeft -= numSkip;
         readLocalAlignment();
     }
@@ -1404,7 +1404,7 @@ unittest
 
     auto recoveredLocalAlignments = new IndexedLocalAlignmentReader(
         lasFile,
-        LasIndex.inferFrom(lasFile),
+        AlignmentStats.inferFrom(lasFile),
         BufferMode.dynamic,
     );
 
@@ -1431,7 +1431,7 @@ unittest
 
     auto recoveredLocalAlignments = new IndexedLocalAlignmentReader(
         lasFile,
-        LasIndex.inferFrom(lasFile),
+        AlignmentStats.inferFrom(lasFile),
         dbFile,
         dbFile,
         BufferMode.dynamic,
@@ -1460,7 +1460,7 @@ unittest
 
     auto recoveredLocalAlignments = new IndexedLocalAlignmentReader(
         lasFile,
-        LasIndex.inferFrom(lasFile),
+        AlignmentStats.inferFrom(lasFile),
         dbFile,
         dbFile,
         BufferMode.dynamic,
@@ -1472,127 +1472,6 @@ unittest
     recoveredLocalAlignments.reset(2);
 
     assert(equal(testLocalAlignments[2 .. $], recoveredLocalAlignments));
-}
-
-
-/// Speed up sparse accesses to LAS files.
-struct LasIndex
-{
-    private
-    {
-        size_t[] localAlignmentIndex;
-        size_t[] sliceIndex;
-        size_t[id_t] readIndex;
-    }
-
-
-    @property bool isInitialized() const pure nothrow @safe @nogc
-    {
-        return localAlignmentIndex.length > 0;
-    }
-
-
-    /// Construct index from LAS file or local alignments range by traversing it once.
-    static LasIndex inferFrom(in string lasFile)
-    {
-        return inferFrom(localAlignmentReader(lasFile));
-    }
-
-    /// ditto
-    static LasIndex inferFrom(LocalAlignmentReader lasReader)
-    {
-        auto lasIndex = LasIndex(uninitializedArray!(size_t[])(lasReader.numLocalAlignments + 1));
-
-        size_t readIdx;
-        id_t lastReadId;
-        lasReader.reset();
-        lasIndex.localAlignmentIndex[0] = LocalAlignmentReader.headerSize;
-        foreach (i, localAlignment; lasReader.enumerate)
-        {
-            const filePos = lasReader.las.tell();
-            lasIndex.localAlignmentIndex[i + 1] = filePos;
-
-            if (localAlignment.contigA.contig.id != lastReadId)
-            {
-                lasIndex.readIndex[localAlignment.contigA.contig.id] = readIdx;
-                lasIndex.storeSliceIndex(readIdx++, i);
-                lastReadId = localAlignment.contigA.contig.id;
-            }
-        }
-        lasIndex.storeSliceIndex(readIdx++, lasReader.numLocalAlignments);
-        lasIndex.sliceIndex = lasIndex.sliceIndex[0 .. readIdx];
-        lasIndex.readIndex.rehash();
-
-        return lasIndex;
-    }
-
-
-    private void storeSliceIndex(size_t i, size_t value) pure nothrow @safe
-    {
-        if (sliceIndex.length == 0)
-            sliceIndex = uninitializedArray!(size_t[])(10_000);
-
-        while (i >= sliceIndex.length)
-            sliceIndex.length += sliceIndex.length/3;
-
-        sliceIndex[i] = value;
-    }
-
-
-    ///
-    size_t numReads() const pure nothrow @safe @nogc
-    {
-        return sliceIndex.length - 1;
-    }
-
-
-    /// Get the index slice for the i'th (0-based) group of local alignments
-    /// grouped by A-read.
-    size_t[2] sliceAt(size_t i) const pure nothrow @safe @nogc
-    {
-        assert(i + 1 < sliceIndex.length);
-        typeof(return) slice;
-        slice[] = sliceIndex[i .. i + 2];
-
-        return slice;
-    }
-
-
-    /// Get the index slice for readId.
-    size_t[2] areadSlice(id_t readId) const pure nothrow @safe
-    {
-        enum emptySlice = typeof(return).init;
-
-        const sliceIdx = assumeWontThrow(readIndex.get(readId, size_t.max));
-
-        return sliceIdx < sliceIndex.length ? sliceAt(sliceIdx) : emptySlice;
-    }
-}
-
-unittest
-{
-    import dazzlib.util.tempfile;
-    import dazzlib.util.testdata;
-    import std.file;
-    import std.algorithm;
-    import std.path;
-
-    auto tmpDir = mkdtemp("./.unittest-XXXXXX");
-    scope (exit)
-        rmdirRecurse(tmpDir);
-
-    auto lasFile = buildPath(tmpDir, "test.las");
-
-    writeTestLas(lasFile);
-
-    auto lasIndex = LasIndex.inferFrom(lasFile);
-
-    assert(lasIndex.localAlignmentIndex == [12, 54, 96, 138, 180]);
-    assert(lasIndex.sliceIndex == [0, 2, 4]);
-    assert(lasIndex.sliceAt(0) == [0, 2]);
-    assert(lasIndex.sliceAt(1) == [2, 4]);
-    assert(lasIndex.areadSlice(1) == lasIndex.sliceAt(0));
-    assert(lasIndex.areadSlice(19) == lasIndex.sliceAt(1));
 }
 
 
@@ -1650,19 +1529,19 @@ LocalAlignmentReader localAlignmentReader(
 /// the contig lengths will be filled in. If no tracePointBuffer is given, it
 /// will be constructed  internally according to bufferMode.
 ///
-/// See_also: IndexedLocalAlignmentReader, LasIndex
+/// See_also: IndexedLocalAlignmentReader, AlignmentStats
 IndexedLocalAlignmentReader indexedLocalAlignmentReader(
     in string lasFile,
     BufferMode bufferMode = BufferMode.skip,
     TracePoint[] tracePointBuffer = [],
 )
 {
-    return indexedLocalAlignmentReader(lasFile, LasIndex.init, null, null, bufferMode, tracePointBuffer);
+    return indexedLocalAlignmentReader(lasFile, AlignmentStats.init, null, null, bufferMode, tracePointBuffer);
 }
 
 IndexedLocalAlignmentReader indexedLocalAlignmentReader(
     in string lasFile,
-    LasIndex index,
+    AlignmentStats index,
     BufferMode bufferMode = BufferMode.skip,
     TracePoint[] tracePointBuffer = [],
 )
@@ -1678,13 +1557,13 @@ IndexedLocalAlignmentReader indexedLocalAlignmentReader(
     TracePoint[] tracePointBuffer = [],
 )
 {
-    return indexedLocalAlignmentReader(lasFile, LasIndex.init, dbA, null, bufferMode, tracePointBuffer);
+    return indexedLocalAlignmentReader(lasFile, AlignmentStats.init, dbA, null, bufferMode, tracePointBuffer);
 }
 
 /// ditto
 IndexedLocalAlignmentReader indexedLocalAlignmentReader(
     in string lasFile,
-    LasIndex index,
+    AlignmentStats index,
     in string dbA,
     BufferMode bufferMode = BufferMode.skip,
     TracePoint[] tracePointBuffer = [],
@@ -1702,21 +1581,21 @@ IndexedLocalAlignmentReader indexedLocalAlignmentReader(
     TracePoint[] tracePointBuffer = [],
 )
 {
-    return indexedLocalAlignmentReader(lasFile, LasIndex.init, dbA, dbB, bufferMode, tracePointBuffer);
+    return indexedLocalAlignmentReader(lasFile, AlignmentStats.init, dbA, dbB, bufferMode, tracePointBuffer);
 }
 
 /// ditto
 IndexedLocalAlignmentReader indexedLocalAlignmentReader(
     in string lasFile,
-    LasIndex index,
+    AlignmentStats index,
     in string dbA,
     in string dbB,
     BufferMode bufferMode = BufferMode.skip,
     TracePoint[] tracePointBuffer = [],
 )
 {
-    prepareBuffer(tracePointBuffer, bufferMode, AlignmentStats.inferFrom(lasFile));
     prepareIndex(index, lasFile);
+    prepareBuffer(tracePointBuffer, bufferMode, index);
 
     return new IndexedLocalAlignmentReader(
         lasFile,
@@ -1732,7 +1611,7 @@ IndexedLocalAlignmentReader indexedLocalAlignmentReader(
 private void prepareBuffer(
     ref TracePoint[] tracePointBuffer,
     BufferMode bufferMode,
-    lazy AlignmentStats alignmentStats,
+    AlignmentStats alignmentStats,
 ) pure @safe
 {
     if (
@@ -1756,10 +1635,10 @@ private void prepareBuffer(
 }
 
 
-private void prepareIndex(ref LasIndex index, string lasFile)
+private void prepareIndex(ref AlignmentStats index, string lasFile)
 {
-    if (!index.isInitialized)
-        index = LasIndex.inferFrom(lasFile);
+    if (!index.isLasIndex)
+        index = AlignmentStats.inferFrom(lasFile);
 }
 
 
@@ -2094,48 +1973,88 @@ struct AlignmentStats
     /// Trace point spacing
     trace_point_t tracePointSpacing;
 
+    // Index
+    private size_t[] lasIndex;
+    private size_t[] sliceIndex;
+    private size_t[id_t] readIndex;
+
+
+    /// Infer stats from lasFile range by traversing it once.
+    static AlignmentStats inferFrom(string lasFile)
+    {
+        auto lasScanner = new LocalAlignmentReader(lasFile, BufferMode.skip);
+
+        return inferFrom(lasScanner);
+    }
+
 
     /// Infer stats from given range by traversing it once.
     static AlignmentStats inferFrom(R)(R localAlignments)
         if (isInputRange!R && is(const(ElementType!R) == const(LocalAlignment)))
     {
-        AlignmentStats headerData;
+        enum makeLasIndex = is(R == LocalAlignmentReader);
+        AlignmentStats stats;
 
-        headerData.tracePointSpacing = inferTracePointSpacingFrom(localAlignments);
+        stats.tracePointSpacing = inferTracePointSpacingFrom(localAlignments);
+        static if (makeLasIndex)
+            stats.lasIndex = uninitializedArray!(size_t[])(
+                localAlignments.numLocalAlignments + 1
+            );
 
+        size_t readIdx;
         id_t lastContig;
         id_t numLocalAlignmentsSinceLastContig;
         id_t numTracePointsSinceLastContig;
         id_t numLocalAlignmentsInChain = 1;
 
-        alias updateMaxPerContig = () {
+        alias updateMaxPerContig = {
             // udpate maxLocalAlignmentsPerContig
-            headerData.maxLocalAlignmentsPerContig = max(
-                headerData.maxLocalAlignmentsPerContig,
+            stats.maxLocalAlignmentsPerContig = max(
+                stats.maxLocalAlignmentsPerContig,
                 numLocalAlignmentsSinceLastContig,
             );
             numLocalAlignmentsSinceLastContig = 0;
 
             // udpate maxTracePointsPerContig
-            headerData.maxTracePointsPerContig = max(
-                headerData.maxTracePointsPerContig,
+            stats.maxTracePointsPerContig = max(
+                stats.maxTracePointsPerContig,
                 numTracePointsSinceLastContig,
             );
             numTracePointsSinceLastContig = 0;
         };
 
+        alias updateIndex = (localAlignment) {
+            stats.readIndex[localAlignment.contigA.contig.id] = readIdx;
+            stats.storeSliceIndex(readIdx++, stats.numLocalAlignments);
+        };
+
+        alias finishIndex = {
+            stats.storeSliceIndex(readIdx++, stats.numLocalAlignments);
+            stats.sliceIndex = stats.sliceIndex[0 .. readIdx];
+            stats.readIndex.rehash();
+        };
+
+        static if (makeLasIndex)
+            stats.lasIndex[0] = LocalAlignmentReader.headerSize;
+
         foreach (localAlignment; localAlignments)
         {
-            if (lastContig != localAlignment.contigA.contig.id)
-                updateMaxPerContig();
+            static if (makeLasIndex)
+                stats.lasIndex[stats.numLocalAlignments + 1] = localAlignments.las.tell();
 
-            ++headerData.numLocalAlignments;
+            if (lastContig != localAlignment.contigA.contig.id)
+            {
+                updateMaxPerContig();
+                updateIndex(localAlignment);
+            }
+
+            ++stats.numLocalAlignments;
             if (localAlignment.flags.start)
-                ++headerData.numAlignmentChains;
+                ++stats.numAlignmentChains;
             else if (localAlignment.flags.unchained)
-                ++headerData.numUnchainedAlignments;
-            headerData.maxLocalAlignments = max(
-                headerData.maxLocalAlignments,
+                ++stats.numUnchainedAlignments;
+            stats.maxLocalAlignments = max(
+                stats.maxLocalAlignments,
                 numLocalAlignmentsInChain,
             );
 
@@ -2143,9 +2062,9 @@ struct AlignmentStats
                 numLocalAlignmentsInChain = 0;
             ++numLocalAlignmentsInChain;
 
-            headerData.numTracePoints += localAlignment.numTracePoints;
-            headerData.maxTracePoints = max(
-                headerData.maxTracePoints,
+            stats.numTracePoints += localAlignment.numTracePoints;
+            stats.maxTracePoints = max(
+                stats.maxTracePoints,
                 localAlignment.numTracePoints,
             );
 
@@ -2155,17 +2074,9 @@ struct AlignmentStats
         }
 
         updateMaxPerContig();
+        finishIndex();
 
-        return headerData;
-    }
-
-
-    /// Infer stats from lasFile range by traversing it once.
-    static AlignmentStats inferFrom(string lasFile)
-    {
-        auto lasScanner = new LocalAlignmentReader(lasFile, BufferMode.skip);
-
-        return inferFrom(lasScanner);
+        return stats;
     }
 
 
@@ -2179,23 +2090,82 @@ struct AlignmentStats
 
         return alignments.front.tracePointSpacing;
     }
+
+
+    /// Returns true if the index is for a binary LAS file; as opposed to
+    /// a range or array.
+    @property bool isLasIndex() const pure nothrow @safe @nogc
+    {
+        return lasIndex.length > 0;
+    }
+
+
+    private void storeSliceIndex(size_t i, size_t value) pure nothrow @safe
+    {
+        if (sliceIndex.length == 0)
+            sliceIndex = uninitializedArray!(size_t[])(10_000);
+
+        while (i >= sliceIndex.length)
+            sliceIndex.length += sliceIndex.length/3;
+
+        sliceIndex[i] = value;
+    }
+
+
+    /// Returns the number of slices in the index.
+    ///
+    /// See_also: sliceAt
+    size_t numSlices() const pure nothrow @safe @nogc
+    {
+        return sliceIndex.length - 1;
+    }
+
+
+    /// Get the index slice for the i'th (0-based) group of local alignments
+    /// grouped by A-read.
+    size_t[2] sliceAt(size_t i) const pure nothrow @safe @nogc
+    {
+        assert(i + 1 < sliceIndex.length);
+        typeof(return) slice;
+        slice[] = sliceIndex[i .. i + 2];
+
+        return slice;
+    }
+
+
+    /// Get the index slice for readId.
+    size_t[2] areadSlice(id_t readId) const pure nothrow @safe
+    {
+        enum emptySlice = typeof(return).init;
+
+        const sliceIdx = assumeWontThrow(readIndex.get(readId, size_t.max));
+
+        return sliceIdx < sliceIndex.length ? sliceAt(sliceIdx) : emptySlice;
+    }
 }
 
 unittest
 {
     import dazzlib.util.testdata;
 
-    assert(AlignmentStats.inferFrom(testLocalAlignments) == AlignmentStats(
-        4,      // numLocalAlignments
-        0,      // numUnchainedAlignments
-        2,      // numAlignmentChains
-        2,      // maxLocalAlignments
-        2,      // maxLocalAlignmentsPerContig
-        4,      // numTracePoints
-        1,      // maxTracePoints
-        2,      // maxTracePointsPerContig
-        100,    // tracePointSpacing
-    ));
+    const stats = AlignmentStats.inferFrom(testLocalAlignments);
+
+    assert(stats.numLocalAlignments == 4);
+    assert(stats.numUnchainedAlignments == 0);
+    assert(stats.numAlignmentChains == 2);
+    assert(stats.maxLocalAlignments == 2);
+    assert(stats.maxLocalAlignmentsPerContig == 2);
+    assert(stats.numTracePoints == 4);
+    assert(stats.maxTracePoints == 1);
+    assert(stats.maxTracePointsPerContig == 2);
+    assert(stats.tracePointSpacing == 100);
+
+    assert(!stats.isLasIndex);
+    assert(stats.sliceIndex == [0, 2, 4]);
+    assert(stats.sliceAt(0) == [0, 2]);
+    assert(stats.sliceAt(1) == [2, 4]);
+    assert(stats.areadSlice(1) == stats.sliceAt(0));
+    assert(stats.areadSlice(19) == stats.sliceAt(1));
 }
 
 unittest
@@ -2211,15 +2181,23 @@ unittest
 
     writeTestLas(lasFile.name);
 
-    assert(AlignmentStats.inferFrom(lasFile.name) == AlignmentStats(
-        4,      // numLocalAlignments
-        0,      // numUnchainedAlignments
-        2,      // numAlignmentChains
-        2,      // maxLocalAlignments
-        2,      // maxLocalAlignmentsPerContig
-        4,      // numTracePoints
-        1,      // maxTracePoints
-        2,      // maxTracePointsPerContig
-        100,    // tracePointSpacing
-    ));
+    const stats = AlignmentStats.inferFrom(lasFile.name);
+
+    assert(stats.numLocalAlignments == 4);
+    assert(stats.numUnchainedAlignments == 0);
+    assert(stats.numAlignmentChains == 2);
+    assert(stats.maxLocalAlignments == 2);
+    assert(stats.maxLocalAlignmentsPerContig == 2);
+    assert(stats.numTracePoints == 4);
+    assert(stats.maxTracePoints == 1);
+    assert(stats.maxTracePointsPerContig == 2);
+    assert(stats.tracePointSpacing == 100);
+
+    assert(stats.isLasIndex);
+    assert(stats.lasIndex == [12, 54, 96, 138, 180]);
+    assert(stats.sliceIndex == [0, 2, 4]);
+    assert(stats.sliceAt(0) == [0, 2]);
+    assert(stats.sliceAt(1) == [2, 4]);
+    assert(stats.areadSlice(1) == stats.sliceAt(0));
+    assert(stats.areadSlice(19) == stats.sliceAt(1));
 }
