@@ -1158,6 +1158,12 @@ class DataDazzTrack(T, Data=byte) if (is(T == int32) || is(T == int64)) : DazzTr
     }
 
 
+    protected size_t dataLength() const nothrow @nogc
+    {
+        return annotations[numReads] / dataRecordSize;
+    }
+
+
     /// Return an array-like object with typed and bounds-checked access to
     /// data.
     ///
@@ -1385,6 +1391,15 @@ class MaskTrack : DataDazzTrack!(int64, int32)
     auto intervals(id_t readIdx) inout
     {
         return toIntervals(dataSegments[readIdx]);
+    }
+
+
+    /// Returns the total number of intervals in this mask track.
+    ///
+    /// See_also: toIntervals
+    size_t numIntervals() const nothrow @nogc
+    {
+        return dataLength / 2;
     }
 
 
