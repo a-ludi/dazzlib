@@ -1109,7 +1109,7 @@ class AnnotationDazzTrack(T) : DazzTrack
     }
 
 
-    inout(T)[] annotations() inout nothrow @nogc
+    inout(T)[] annotations() inout pure nothrow @nogc
     {
         return (cast(inout(T)*) dazzTrack.anno)[0 .. numReads];
     }
@@ -1389,18 +1389,108 @@ class MaskTrack : DataDazzTrack!(int64, int32)
 
 
     /// Returns a lazy random-access range of `Interval`s for dataSegment.
-    static auto toIntervals(const int[] dataSegment)
+    static auto toIntervals(const int[] dataSegment) pure nothrow @safe @nogc
     in (dataSegment.length % 2 == 0, "corrupted mask data")
     {
-        return iota(dataSegment.length / 2).map!((i) {
-            auto interval = Interval(
-                dataSegment[2*i].boundedConvert!coord_t,
-                dataSegment[2*i + 1].boundedConvert!coord_t,
-            );
-            assert(&interval);
+        static struct Intervals
+        {
+            const(int)[] dataSegment;
 
-            return interval;
-        });
+
+            void popFront() pure nothrow @safe
+            {
+                assert(!empty, "Attempting to popFront an empty " ~ typeof(this).stringof);
+
+                dataSegment.popFront();
+                dataSegment.popFront();
+            }
+
+
+            @property Interval front() pure nothrow @safe
+            out (interval; interval.begin <= interval.end, "invalid interval: end < begin")
+            {
+                assert(!empty, "Attempting to fetch the front of an empty " ~ typeof(this).stringof);
+
+                return intervalAt(0);
+            }
+
+
+            void popBack() pure nothrow @safe
+            {
+                assert(!empty, "Attempting to popBack an empty " ~ typeof(this).stringof);
+
+                dataSegment.popBack();
+                dataSegment.popBack();
+            }
+
+
+            @property Interval back() pure nothrow @safe
+            out (interval; interval.begin <= interval.end, "invalid interval: end < begin")
+            {
+                assert(!empty, "Attempting to fetch the back of an empty " ~ typeof(this).stringof);
+
+                return intervalAt(length - 1);
+            }
+
+
+            @property bool empty() const pure nothrow @safe
+            {
+                return dataSegment.empty;
+            }
+
+
+            @property size_t length() const pure nothrow @safe @nogc
+            {
+                return dataSegment.length / 2;
+            }
+
+
+            alias opDollar = length;
+
+
+            Interval opIndex(size_t i) const pure nothrow @safe @nogc
+            {
+                return intervalAt(i);
+            }
+
+
+            Intervals opIndex(size_t[2] slice) const pure nothrow @safe @nogc
+            {
+                return Intervals(dataSegment[2*slice[0] .. 2*slice[1]]);
+            }
+
+
+            size_t[2] opSlice(size_t dim)(size_t from, size_t to) const pure nothrow @safe @nogc
+            if (dim == 0)
+            {
+                return [from, to];
+            }
+
+
+            Intervals save() const pure nothrow @safe @nogc
+            {
+                return Intervals(dataSegment[]);
+            }
+
+
+            private Interval intervalAt(size_t i) const pure nothrow @safe @nogc
+            out (interval; interval.begin <= interval.end, "invalid interval: end < begin")
+            {
+                return Interval(
+                    dataSegment[2*i].boundedConvert!coord_t,
+                    dataSegment[2*i + 1].boundedConvert!coord_t,
+                );
+            }
+        }
+
+        static assert(isForwardRange!Intervals);
+        static assert(isInputRange!Intervals);
+        static assert(isBidirectionalRange!Intervals);
+        static assert(isRandomAccessRange!Intervals);
+        static assert(hasLength!Intervals);
+        static assert(hasSlicing!Intervals);
+
+        return Intervals(dataSegment);
     }
 
 
