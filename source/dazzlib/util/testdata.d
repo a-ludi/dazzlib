@@ -31,7 +31,7 @@ private string removeWhitespace(string base64)
 }
 
 
-@property string[] testSequences() pure
+@property string[] testSequencesUntrimmed() pure
 {
     // get a reproducable pseudo-random sequence
     auto random = Random(0x0a46e94eU);
@@ -45,6 +45,7 @@ private string removeWhitespace(string base64)
         .array;
 
     return [
+        fakeSeq(5),
         fakeSeq(15),
         fakeSeq(16),
         fakeSeq(42),
@@ -75,53 +76,108 @@ private string removeWhitespace(string base64)
 }
 
 
+@property string[] testSequencesTrimmed() pure
+{
+    return testSequencesUntrimmed[1 .. $];
+}
+
+
+@property string[] testSequencePrologsUntrimmed() pure
+{
+    return [
+        "faked",
+        "faked",
+        "faked",
+        "faked",
+        "faked",
+        "faked",
+        "faked",
+        "faked",
+        "faked",
+        "faked",
+        "faked",
+        "faked",
+        "faked",
+        "faked",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+    ];
+}
+
+
+@property string[] testSequencePrologsTrimmed() pure
+{
+    return testSequencePrologsUntrimmed[1 .. $];
+}
+
+
 @property string[] testFastaRecords() pure
 {
-    auto fakeRead = (id_t id, string sequence) => format!">faked/%d/0_%d RQ=0.85\n%s"(
+    auto fakeRead = (id_t id, string well, string sequence) => format!">%s/%d/0_%d RQ=0.85\n%s"(
+        well,
         id,
         id,
         sequence,
     );
 
-    return testSequences
+    return zip(testSequencePrologsUntrimmed, testSequencesUntrimmed)
         .enumerate(1)
-        .map!(enumSeq => fakeRead(enumSeq.index, enumSeq.value))
+        .map!(enumSeq => fakeRead(enumSeq.index, enumSeq.value[0], enumSeq.value[1]))
         .array;
+}
+
+unittest
+{
+    import std.stdio;
+
+    //writefln!"%-(%s\n%)"(testFastaRecords());
 }
 
 
 void writeTestDb(string stubFilename)
 {
     enum dbStubBase64 = `
-        ZmlsZXMgPSAgICAgICAgIDEKICAgICAgICAgMjYgc3Rkb3V0IGZha2VkCmJsb2NrcyA9ICAgICAgICAgMQpzaXplID0g
-        ICAyMDAwMDAwMDAgY3V0b2ZmID0gICAgICAgICAwIGFsbCA9IDAKICAgICAgICAgMCAgICAgICAgIDAKICAgICAgICAy
-        NiAgICAgICAgMjYK
+        ZmlsZXMgPSAgICAgICAgIDIKICAgICAgICAgMTQgc3Rkb3V0IGZha2VkCiAgICAgICAgIDI3IHN0ZG91dCB0ZXN0CmJs
+        b2NrcyA9ICAgICAgICAgMQpzaXplID0gICAyMDAwMDAwMDAgY3V0b2ZmID0gICAgICAgIDEwIGFsbCA9IDAKICAgICAg
+        ICAgMCAgICAgICAgIDAKICAgICAgICAyNyAgICAgICAgMjYK
     `.removeWhitespace;
     enum dbBasePairsBase64 = `
-        JtqoHNH+KMrdF2NVckdwzxJvQNrul2DMmpK2bUrQISP/yWjO9vBKQIAgOSfu9l7mqJfo0AIVj3hd4/02KClgq1Ae58UK
-        BkcW2eAG68k/gv7SPlkwUBRa9t++vsel7uHAjn2rzeasP9TZt2D5/NmfQmDneePIwCfzDjVpAiCP0ugA11ATc2MQGjyT
-        LhD7YKYRWLLKIXx0IHeRXS924Zac1CtArxMQBXsnSrvFHLB2Kih6JKd7EpaFwDOTbu2TwZD4kUWQeQEoiDTA/2xPqV6N
-        IU3b9FBoU2XqIn50J0THgNfVjFV93khnBrWwyGOVUZ0ycGDveCCJGEqqW97bLUZccEx8PKP6wjJAzGlw
+        JsBqoH0c+KMrdF2NVckdwzxJvTawul2DMmpK2bUrSECP/yWjO9vBKQIIAOSfu9l7mqJfo0CAVj3hd4/02KClqtBAe58U
+        KBkcW2eBsK8k/gv7SPlkwUUQa9t++vsel7uHI5D2rzeasP9TZt2+cPNmfQmDneePIwnwzDjVpAiCP0ugNdBATc2MQGjy
+        TLh+0IKYRWLLKIXx0J3gRXS924Zac1CtK8BMQBXsnSrvFHLdgKih6JKd7EpaFwzgTbu2TwZD6RQWQeQEoiDT/0CxPqV6
+        NIU3b9FaEE2XqIn50J0THjXwVjFV93khnBrW8hCOVUZ0ycGDveCiQGEqqW97bLUZcdMQ8PKP6wjJAzGl/AA=
     `.removeWhitespace;
     enum dbIndexBase64 = `
-        GgAAABoAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAqAAAAAAAAAPsDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAPAAAAAAAAAAAAAAAAAAAAAAAAAP//
-        ////////VQgAAAAAAAACAAAAEAAAAAAAAAAAAAAABAAAAAAAAAD//////////1UIAAAAAAAAAwAAACoAAAAAAAAAAAAA
-        AAgAAAAAAAAA//////////9VCAAAAAAAAAQAAAAqAAAAAAAAAAAAAAATAAAAAAAAAP//////////VQgAAAAAAAAFAAAA
-        KgAAAAAAAAAAAAAAHgAAAAAAAAD//////////1UIAAAAAAAABgAAACoAAAAAAAAAAAAAACkAAAAAAAAA//////////9V
-        CAAAAAAAAAcAAAAqAAAAAAAAAAAAAAA0AAAAAAAAAP//////////VQgAAAAAAAAIAAAAKgAAAAAAAAAAAAAAPwAAAAAA
-        AAD//////////1UIAAAAAAAACQAAACoAAAAAAAAAAAAAAEoAAAAAAAAA//////////9VCAAAAAAAAAoAAAAqAAAAAAAA
-        AAAAAABVAAAAAAAAAP//////////VQgAAAAAAAALAAAAKgAAAAAAAAAAAAAAYAAAAAAAAAD//////////1UIAAAAAAAA
-        DAAAACoAAAAAAAAAAAAAAGsAAAAAAAAA//////////9VCAAAAAAAAA0AAAAqAAAAAAAAAAAAAAB2AAAAAAAAAP//////
-        ////VQgAAAAAAAAOAAAAKgAAAAAAAAAAAAAAgQAAAAAAAAD//////////1UIAAAAAAAADwAAACoAAAAAAAAAAAAAAIwA
-        AAAAAAAA//////////9VCAAAAAAAABAAAAAqAAAAAAAAAAAAAACXAAAAAAAAAP//////////VQgAAAAAAAARAAAAKgAA
-        AAAAAAAAAAAAogAAAAAAAAD//////////1UIAAAAAAAAEgAAACoAAAAAAAAAAAAAAK0AAAAAAAAA//////////9VCAAA
-        AAAAABMAAAAfAAAAAAAAAAAAAAC4AAAAAAAAAP//////////VQgAAAAAAAAUAAAAIQAAAAAAAAAAAAAAwAAAAAAAAAD/
-        /////////1UIAAAAAAAAFQAAACoAAAAAAAAAAAAAAMkAAAAAAAAA//////////9VCAAAAAAAABYAAAAqAAAAAAAAAAAA
-        AADUAAAAAAAAAP//////////VQgAAAAAAAAXAAAAKgAAAAAAAAAAAAAA3wAAAAAAAAD//////////1UIAAAAAAAAGAAA
-        ACoAAAAAAAAAAAAAAOoAAAAAAAAA//////////9VCAAAAAAAABkAAAAqAAAAAAAAAAAAAAD1AAAAAAAAAP//////////
-        VQgAAAAAAAAaAAAAKgAAAAAAAAAAAAAAAAEAAAAAAAD//////////1UIAAAAAAAA
-    `.removeWhitespace;
+        GwAAABoAAAAKAAAAAAAAAAAAdz4AgIM+AAB+PgAAgj4qAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAFAAAAAAAAAAAAAAAAAAAAAAAAAP//
+        ////////VQgAAAAAAAACAAAADwAAAAAAAAAAAAAAAgAAAAAAAAD//////////1UIAAAAAAAAAwAAABAAAAAAAAAAAAAA
+        AAYAAAAAAAAA//////////9VCAAAAAAAAAQAAAAqAAAAAAAAAAAAAAAKAAAAAAAAAP//////////VQgAAAAAAAAFAAAA
+        KgAAAAAAAAAAAAAAFQAAAAAAAAD//////////1UIAAAAAAAABgAAACoAAAAAAAAAAAAAACAAAAAAAAAA//////////9V
+        CAAAAAAAAAcAAAAqAAAAAAAAAAAAAAArAAAAAAAAAP//////////VQgAAAAAAAAIAAAAKgAAAAAAAAAAAAAANgAAAAAA
+        AAD//////////1UIAAAAAAAACQAAACoAAAAAAAAAAAAAAEEAAAAAAAAA//////////9VCAAAAAAAAAoAAAAqAAAAAAAA
+        AAAAAABMAAAAAAAAAP//////////VQgAAAAAAAALAAAAKgAAAAAAAAAAAAAAVwAAAAAAAAD//////////1UIAAAAAAAA
+        DAAAACoAAAAAAAAAAAAAAGIAAAAAAAAA//////////9VCAAAAAAAAA0AAAAqAAAAAAAAAAAAAABtAAAAAAAAAP//////
+        ////VQgAAAAAAAAOAAAAKgAAAAAAAAAAAAAAeAAAAAAAAAD//////////1UIAAAAAAAADwAAACoAAAAAAAAAAAAAAIMA
+        AAAAAAAA//////////9VCAAAAAAAABAAAAAqAAAAAAAAAAAAAACOAAAAAAAAAP//////////VQgAAAAAAAARAAAAKgAA
+        AAAAAAAAAAAAmQAAAAAAAAD//////////1UIAAAAAAAAEgAAACoAAAAAAAAAAAAAAKQAAAAAAAAA//////////9VCAAA
+        AAAAABMAAAAqAAAAAAAAAAAAAACvAAAAAAAAAP//////////VQgAAAAAAAAUAAAAHwAAAAAAAAAAAAAAugAAAAAAAAD/
+        /////////1UIAAAAAAAAFQAAACEAAAAAAAAAAAAAAMIAAAAAAAAA//////////9VCAAAAAAAABYAAAAqAAAAAAAAAAAA
+        AADLAAAAAAAAAP//////////VQgAAAAAAAAXAAAAKgAAAAAAAAAAAAAA1gAAAAAAAAD//////////1UIAAAAAAAAGAAA
+        ACoAAAAAAAAAAAAAAOEAAAAAAAAA//////////9VCAAAAAAAABkAAAAqAAAAAAAAAAAAAADsAAAAAAAAAP//////////
+        VQgAAAAAAAAaAAAAKgAAAAAAAAAAAAAA9wAAAAAAAAD//////////1UIAAAAAAAAGwAAACoAAAAAAAAAAAAAAAIBAAAA
+        AAAA//////////9VCAAAAAAAAA==
+`.removeWhitespace;
 
     auto dbFiles = EssentialDbFiles(stubFilename);
 

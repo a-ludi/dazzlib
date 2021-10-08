@@ -451,10 +451,10 @@ class DazzDb
 
         auto dazzDb = new DazzDb(dbFile);
 
-        foreach (i, expSequence; testSequences)
+        foreach (i, expSequence; testSequencesTrimmed)
             assert(dazzDb.loadRead(cast(id_t) i + 1, SequenceFormat.asciiLower) == expSequence);
 
-        foreach (i, expSequence; testSequences)
+        foreach (i, expSequence; testSequencesTrimmed)
         {
             const begin = cast(coord_t) (i % 2 == 0 ? i                  : 0);
             const end   = cast(coord_t) (i % 2 == 0 ? expSequence.length : i);
