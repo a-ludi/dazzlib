@@ -125,6 +125,9 @@ struct DAZZ_READ
         best = 0x0800,
     }
 
+    /// ditto
+    alias Flags = BitFlags!Flag;
+
 
     @property int qv() const pure nothrow @safe @nogc
     {
@@ -138,13 +141,13 @@ struct DAZZ_READ
     }
 
 
-    @property BitFlags!Flag flags() const pure nothrow @safe @nogc
+    @property Flags flags() const pure nothrow @safe @nogc
     {
-        return BitFlags!Flag(cast(Flag) (rawFlags & ~qvMask));
+        return Flags(cast(Flag) (rawFlags & ~qvMask));
     }
 
 
-    @property void flags(BitFlags!Flag value) pure nothrow @safe @nogc
+    @property void flags(Flags value) pure nothrow @safe @nogc
     {
         rawFlags &= ((cast(int) value) & ~qvMask) | (rawFlags & qvMask);
     }
@@ -316,7 +319,7 @@ struct DAZZ_STUB
 /// fields are crammed into the first two integer spaces of the record.
 struct DAZZ_DB
 {
-    // DB flags.
+    /// DB flags.
     enum Flag : int
     {
         /// DB is an arrow DB
@@ -324,6 +327,9 @@ struct DAZZ_DB
         /// all wells are in the trimmed DB
         all = 0x1,
     }
+
+    /// ditto
+    alias Flags = BitFlags!Flag;
 
     /// Total number of reads in untrimmed DB
     int ureads;
@@ -389,6 +395,8 @@ enum DbStubFileFormat : string
 /// Used to tell Read_DB_Stub which part of the DB stub to read.
 enum StubPart : int
 {
+    ///
+    none = 0x0,
     ///
     nreads = 0x1,
     ///
