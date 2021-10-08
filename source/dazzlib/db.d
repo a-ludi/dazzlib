@@ -226,6 +226,7 @@ class DazzDb
     }
 
     private DAZZ_DB dazzDb;
+    private DAZZ_STUB* dazzStub;
     private string _dbFile;
     private DbType _dbType;
     private DazzTrack[string] _trackIndex;
@@ -236,7 +237,7 @@ class DazzDb
     /// `DazzlibException`s.
     ///
     /// Throws: DazzlibException on errors
-    this(string dbFile, TrimDb trimDb = Yes.trimDb)
+    this(string dbFile, TrimDb trimDb = Yes.trimDb, StubPart stubParts = StubPart.all)
     {
         auto result = Open_DB(dbFile.toStringz, &this.dazzDb);
         dazzlibEnforce(result >= 0, currentError.idup);
@@ -246,10 +247,18 @@ class DazzDb
         if (dbFile.endsWith(DbExtension.dam, DbExtension.db))
             this._dbFile = dbFile;
         else
-            this._dbFile = dbType == DbType.dam?  DbExtension.dam : DbExtension.db;
+            this._dbFile = dbFile ~ (dbType == DbType.dam? DbExtension.dam : DbExtension.db);
+
+        readStub(stubParts, trimDb);
 
         if (trimDb)
             catchErrorMessage!Trim_DB(&dazzDb);
+    }
+
+    /// ditto
+    this(string dbFile, StubPart stubParts)
+    {
+        this(dbFile, Yes.trimDb, stubParts);
     }
 
 
@@ -266,6 +275,55 @@ class DazzDb
     ~this()
     {
         Close_DB(&dazzDb);
+        Free_DB_Stub(dazzStub);
+    }
+
+
+    private void readStub(StubPart parts, TrimDb trimDb)
+    in (!isTrimmed)
+    {
+        if (hasStub(parts) || parts == StubPart.none)
+            return;
+
+        dazzStub = Read_DB_Stub(_dbFile.toStringz, parts);
+
+        if (trimDb)
+        {
+            const DAZZ_READ[] allReads = (dazzDb.reads - dazzDb.ufirst)[0 .. numReadsUntrimmed];
+            int[] nreads = dazzStub.nreads[0 .. dazzStub.nfiles];
+
+            int newIndex;
+            auto oldIndex = dazzDb.ufirst;
+            auto lastIndex = oldIndex + dazzDb.nreads;
+            foreach (ref nread; nreads)
+            {
+                while (oldIndex < nread && oldIndex < lastIndex)
+                {
+                    if (
+                        (flags.all || reads[oldIndex].flags.best) &&
+                        allReads[oldIndex].rlen >= cutoff
+                    )
+                        newIndex++;
+                    oldIndex += 1;
+                }
+
+                nread = newIndex;
+            }
+        }
+    }
+
+
+    /// Returns true if the stub has been read and contains requiredParts.
+    @property bool hasStub(StubPart requiredParts = StubPart.all) const pure nothrow @safe @nogc
+    {
+        alias ignorePart = (StubPart part) => !(requiredParts & part);
+
+        with (StubPart)
+            return dazzStub !is null
+                && (ignorePart(nreads) || dazzStub.nreads !is null)
+                && (ignorePart(files) || dazzStub.fname !is null)
+                && (ignorePart(prologs) || dazzStub.prolog !is null)
+                && (ignorePart(blocks) || (dazzStub.ublocks !is null && dazzStub.tblocks !is null));
     }
 
 
@@ -876,7 +934,44 @@ class DazzDb
     }
 
 
-    /// Get the FASTA header of `reads[readIdx]`
+    /// Get the proglog of the FASTA header. Usually this is an ID for the
+    /// well.
+    string getReadProlog(size_t readIdx)
+    {
+        dazzlibEnforce(hasStub(StubPart.prologs), "prologs must be loaded");
+
+        const readIndex = dazzStub.nreads[0 .. dazzStub.nfiles];
+        const wellIdx = readIndex
+            .cumulativeFold!"a + b"(0)
+            .countUntil!"a > b"(readIdx);
+
+        return fromStringz(dazzStub.prolog[wellIdx]).idup;
+    }
+
+    unittest
+    {
+        import dazzlib.util.tempfile;
+        import dazzlib.util.testdata;
+        import std.exception;
+        import std.file;
+        import std.algorithm;
+
+        auto tmpDir = mkdtemp("./.unittest-XXXXXX");
+        scope (exit)
+            rmdirRecurse(tmpDir);
+
+        auto dbFile = buildPath(tmpDir, "test.db");
+
+        writeTestDb(dbFile);
+
+        auto dazzDb = new DazzDb(dbFile);
+
+        foreach (i, expProlog; testSequencePrologsTrimmed)
+            assert(dazzDb.getReadProlog(i) == expProlog);
+    }
+
+
+    /// Get the FASTA header of `reads[readIdx]` without leading `>`.
     string getContigHeader(size_t readIdx)
     {
         dazzlibEnforce(dbType == DbType.dam, "may only be called on a DAM");
