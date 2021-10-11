@@ -941,9 +941,7 @@ class DazzDb
         dazzlibEnforce(hasStub(StubPart.prologs), "prologs must be loaded");
 
         const readIndex = dazzStub.nreads[0 .. dazzStub.nfiles];
-        const wellIdx = readIndex
-            .cumulativeFold!"a + b"(0)
-            .countUntil!"a > b"(readIdx);
+        const wellIdx = readIndex.countUntil!"a > b"(readIdx);
 
         return fromStringz(dazzStub.prolog[wellIdx]).idup;
     }
